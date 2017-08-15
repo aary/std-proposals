@@ -1,0 +1,107 @@
+% ********************************* HEADERS ***********************************
+\documentclass{article}
+\usepackage[top=.75in, bottom=.75in, left=.50in,right=.50in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{titling}
+\pagestyle{fancy}
+\lhead{Top bar topic}
+\rhead{\thepage}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{listings}
+\lstset{
+  language=C++,
+  showstringspaces=false,
+  basicstyle={\small\ttfamily},
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{dkgreen},
+}
+\usepackage[colorlinks,urlcolor={blue}]{hyperref}
+%\setlength{\parskip}{1em}
+\usepackage{parskip}
+\usepackage{indentfirst}
+\setlength{\droptitle}{-4em}
+% \usepackage{concmath}
+% \usepackage[T1]{fontenc}
+% ********************************* HEADERS ***********************************
+
+\begin{document}
+\title{\textbf{Structured bindings with polymorphic lambas}}
+\author{Aaryaman Sagar (rmn100@gmail.com)}
+\date{August 14, 2017}
+\maketitle
+
+\section{Introduction}
+
+This paper proposes usage of structured with polymorphic lambdas, adding them
+to another place where \texttt{auto} can be used as a declarator
+
+\begin{lstlisting}
+auto map = std::map<int, int>{{1, 2}, {3, 4}};
+std::for_each((map, [](auto [key, value]) {
+    cout << key << " " << value << endl;
+});
+\end{lstlisting}
+
+This would make for nice syntactic sugar to situations such as the above
+without having to decompose the tuple-like object manually, similar to how
+structured bindings are used in range based for loops
+
+\begin{lstlisting}
+auto map = std::map<int, int>{{1, 2}, {3, 4}};
+for (auto [key, value] : map) {
+    cout << key << " " << value << endl;
+}
+\end{lstlisting}
+
+\section{Motivation}
+
+\subsection{Simplicity and uniformity}
+Structured binding initialization can be used almost anywhere \texttt{auto} is
+used to initialize a variable (not considering \texttt{auto} deduced return
+types), and allowing this to happen in polymorphic lambdas would make code
+simpler, easier to read and generalize better
+
+\begin{lstlisting}
+std::find_if(range, [](const auto& [key, value]) {
+    return examine(key, value);
+});
+\end{lstlisting}
+
+\subsection{Programmer demand}
+There is some programmer demand and uniform agreement on this feature
+
+\begin{enumerate}
+    \item \href{https://stackoverflow.com/questions/45541334}{Stack Overflow:
+        Can the structured bindings syntax be used in polymorphic lambdas}
+    \item \href{https://goo.gl/fRSwNg}{ISO C++ : Initial idea}
+\end{enumerate}
+
+\subsection{Prevalence}
+It is not uncommon to execute algorithms on containers that contain a value
+type that is either a tuple or a tuple-like decomposable class.  And in such
+cases code usually deteriorates to manually unpacking the instance of the
+decomposable class for maximum reaadability, for example
+
+\begin{lstlisting}
+auto result = std::count_if(map, [](const auto& key_value_pair) {
+    const auto& key = key_value_pair.first;
+    const auto& value = key_value_pair.second;
+
+    return examine(key, process_key(key), value);
+});
+\end{lstlisting}
+
+The first two lines in the lambda are just noise and can nicely be replaced
+with structured bindings in the function parameter
+
+\begin{lstlisting}
+auto result = std::count_if(map, [](const auto& [key, value]) {
+    return examine(key, process_key(key), value);
+});
+\end{lstlisting}
+
+\end{document}
+
