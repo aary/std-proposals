@@ -4,7 +4,7 @@
 \usepackage{fancyhdr}
 \usepackage{titling}
 \pagestyle{fancy}
-\lhead{Top bar topic}
+\lhead{Structured bindings with polymorphic lambas}
 \rhead{\thepage}
 \usepackage{color}
 \usepackage{graphicx}
@@ -56,6 +56,7 @@ for (auto [key, value] : map) {
 }
 \end{lstlisting}
 
+
 \section{Motivation}
 
 \subsection{Simplicity and uniformity}
@@ -102,6 +103,12 @@ auto result = std::count_if(map, [](const auto& [key, value]) {
     return examine(key, process_key(key), value);
 });
 \end{lstlisting}
+
+
+\section{Impact on the standard}
+The proposal describes a pure language extension which is a non-breaking
+change - code that was previously ill-formed now would have well-defined
+semantics.
 
 \end{document}
 
