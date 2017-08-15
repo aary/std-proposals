@@ -77,7 +77,8 @@ There is some programmer demand and uniform agreement on this feature
 \begin{enumerate}
     \item \href{https://stackoverflow.com/questions/45541334}{Stack Overflow:
         Can the structured bindings syntax be used in polymorphic lambdas}
-    \item \href{https://goo.gl/fRSwNg}{ISO C++ : Initial idea}
+    \item \href{https://goo.gl/fRSwNg}{ISO C++ : Structured bindings and
+        polymorphic lambdas}
 \end{enumerate}
 
 \subsection{Prevalence}
@@ -109,6 +110,96 @@ auto result = std::count_if(map, [](const auto& [key, value]) {
 The proposal describes a pure language extension which is a non-breaking
 change - code that was previously ill-formed now would have well-defined
 semantics.
+
+
+\section{Impact on overloading and function resolution}
+Lambdas do not natively support function overloading, however one can lay out
+lambdas in a way that they are overloaded, for example
+
+\begin{lstlisting}
+template <typename... Types> struct Overload { using Types::operator()...; };
+template <typename... Types> Overload(Types...) -> Overload<Types...>;
+
+namespace {
+    constexpr auto one = [](int) {};
+    constexpr auto two = [](char) {};
+} // namespace <anonymous>
+
+constexpr auto overloaded = Overload{one, two};
+\end{lstlisting}
+
+And in such a situation the consequences of this proposal must be considered.
+The easiest way to understand this proposal is to consider the rough syntactic
+sugar that this provides.  A polymorphic lambda with a structured binding
+declaration translates to a simple functor with a templated
+\texttt{operator()} method with the structured binding "decomposition"
+happening inside the function
+
+\begin{lstlisting}
+auto lambda = [](auto [key, value]) { ... };
+
+/**
+ * Expansion of the above lambda in C++14 form with respect to overloading
+ */
+struct ANONYMOUS_LAMBDA {
+    template <typename Type>
+    auto operator()(Type&& instance) {
+        auto [key, value] = std::forward<Type>(instance);
+        ...
+    }
+};
+\end{lstlisting}
+
+(Note that the above is just for illustration purposes.  It has some
+differences with the way such a lambda would translate into real code - the
+forwarded instance prevents elision because it is an xvalue)
+
+Given the above expansion, a polymorphic lambda behaves identically to a
+lambda with a \textt{auto} return type.  And nothing special happens when
+overloading
+
+\begin{lstlisting}
+template <typename... Types> struct Overload { using Types::operator()...; };
+template <typename... Types> Overload(Types...) -> Overload<Types...>;
+
+namespace {
+    constexpr auto one = [](int) {};
+    constexpr auto two = [](auto [key, value]) {};
+} // namespace <anonymous>
+
+static auto overloaded = Overload{one, two};
+
+int main() {
+    auto integer = int{1};
+    auto pair = std::make_pair(1, 2);
+    auto error = double{1};
+
+    // calls the lambda named "one"
+    overloaded(integer);
+    // calls the lamdba named "two"
+    overloaded(pair);
+    // error
+    overloaded(error);
+}
+\end{lstlisting}
+
+
+\section{Compiler Diagnostics}
+The last case in the example above leads to a natural question - what happens
+when a type is passed to a polymorphic lambda accepting a structured bindings
+decomposable value in such a way that either the cardinality of the
+decomposable value is not equal to the cardinality (if any) of the
+decomposable part of the type.
+
+Any compiler diagnostics provided are the same as that for regular structured
+bindings initializations - with compiler intrinsic concepts if those are
+included.
+
+
+\section{Exceptions}
+Exceptions during "unwrapping" (if, for example a member or free ADL defined
+`get<>` throws) will propagate from the call site, just as with regular
+polymorphic lambdas
 
 \end{document}
 
