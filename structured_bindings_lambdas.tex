@@ -112,6 +112,28 @@ change - code that was previously ill-formed now would have well-defined
 semantics.
 
 
+\section{Interaction with concepts}
+Any compiler diagnostics provided are the same as that for regular structured
+bindings initializations - with a compiler concept that determines if a type
+is \texttt{x-decomposable}
+
+Part of such a concept can be made using the tools available to the
+programmer.  In particular, it is possible to make a concept or SFINAE trait
+that enables us to check if a type is decomposable via a member or ADL defined
+free \texttt{get<>()} method/function
+
+\texttt{[dcl.struct.bind]}p2 and \texttt{[dcl.struct.bind]}p3 define
+decomposability that can be checked by the programmer at compile time via a
+concept or SFINAE trait.  However \texttt{[dcl.struct.bind]}p4 describes a
+method of unpacking that cannot be enforced purely by the language constructs
+available as of C++17.  And as such a concept provided by the compiler is
+required.
+
+This concept \texttt{std::decomposable<x>} shall be a concept that accepts a
+non type template parameter of type \texttt{std::size\_t} that determines the
+cardinality of the structured bindings decomposition
+
+
 \section{Impact on overloading and function resolution}
 Lambdas do not natively support function overloading, however one can lay out
 lambdas in a way that they are overloaded, for example
@@ -121,11 +143,10 @@ template <typename... Types> struct Overload { using Types::operator()...; };
 template <typename... Types> Overload(Types...) -> Overload<Types...>;
 
 namespace {
-    constexpr auto one = [](int) {};
-    constexpr auto two = [](char) {};
+    auto one = [](int) {};
+    auto two = [](char) {};
+    auto overloaded = Overload{one, two};
 } // namespace <anonymous>
-
-constexpr auto overloaded = Overload{one, two};
 \end{lstlisting}
 
 And in such a situation the consequences of this proposal must be considered.
@@ -155,19 +176,19 @@ differences with the way such a lambda would translate into real code - the
 forwarded instance prevents elision because it is an xvalue)
 
 Given the above expansion, a polymorphic lambda behaves identically to a
-lambda with a \textt{auto} return type.  And nothing special happens when
-overloading
+lambda with a \textt{auto} parameter type with the difference that these are
+constrained to work only with parameters that are \texttt{x} decomposable.
+And nothing special happens when overloading
 
 \begin{lstlisting}
 template <typename... Types> struct Overload { using Types::operator()...; };
 template <typename... Types> Overload(Types...) -> Overload<Types...>;
 
 namespace {
-    constexpr auto one = [](int) {};
-    constexpr auto two = [](auto [key, value]) {};
+    auto one = [](int) {};
+    auto two = [](auto [key, value]) {};
+    auto overloaded = Overload{one, two};
 } // namespace <anonymous>
-
-static auto overloaded = Overload{one, two};
 
 int main() {
     auto integer = int{1};
@@ -183,22 +204,25 @@ int main() {
 }
 \end{lstlisting}
 
+Further, one key point to consider here is that the concept based constraints
+on such lambdas allows for the following two orthogonal overloads to work
+nicely with each other
 
-\section{Compiler Diagnostics}
-The last case in the example above leads to a natural question - what happens
-when a type is passed to a polymorphic lambda accepting a structured bindings
-decomposable value in such a way that either the cardinality of the
-decomposable value is not equal to the cardinality (if any) of the
-decomposable part of the type.
+\begin{lstlisting}
+namespace {
+    auto lambda_one = [](auto [one, two]) {};
+    auto lambda_two = [](auto [one, two, three]) {};
+    auto overloaded = Overload{lambda_one, lambda_two};
+} // namespace <anonymous>
+\end{lstlisting}
 
-Any compiler diagnostics provided are the same as that for regular structured
-bindings initializations - with compiler intrinsic concepts if those are
-included.
+Since here either one lambda can be called or both, in no case can both
+satisfy the requirements set forth by the compiler concept
 
 
 \section{Exceptions}
 Exceptions during "unwrapping" (if, for example a member or free ADL defined
-`get<>` throws) will propagate from the call site, just as with regular
+\texttt{get<>} throws) will propagate from the call site, just as with regular
 polymorphic lambdas
 
 \end{document}
