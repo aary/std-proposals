@@ -141,6 +141,7 @@ type is \texttt{x-decomposable} (and this will take into consideration the
 requirements set forth by \texttt{[dcl.struct.bind]} paragraphs 2, 3 and 4.
 
 
+\newpage
 \section{Impact on overloading and function resolution}
 Lambdas do not natively support function overloading, however one can lay out
 lambdas in a way that they are overloaded, for example
@@ -164,15 +165,15 @@ declaration translates to a simple functor with a templated
 happening inside the function
 
 \begin{lstlisting}
-auto lambda = [](auto [key, value]) { ... };
+auto lambda = [](const auto [key, value]) { ... };
 
 /**
  * Expansion of the above lambda in C++14 form with respect to overloading
  */
 struct ANONYMOUS_LAMBDA {
     template <std::decomposable<2> Type>
-    auto operator()(Type&& instance) {
-        auto [key, value] = std::forward<Type>(instance);
+    auto operator()(const Type instance) const {
+        auto& [key, value] = instance;
         ...
     }
 };
@@ -180,8 +181,7 @@ struct ANONYMOUS_LAMBDA {
 
 (Note that the above is just for illustration purposes.  It has some
 differences with the way such a lambda would translate into real code - for
-example, the forwarded instance prevents elision because it is an xvalue and
-further returning a value from the structured bindings in the initialization
+example, returning a value from the structured bindings in the initialization
 would not be a candidate for NRVO in any case because of the explicit
 disallowance in \texttt{[class.copy.elision]})
 
@@ -239,6 +239,59 @@ Since here either one lambda can be called or both, in no case can both
 satisfy the requirements set forth by the compiler concept
 \texttt{std::decomposable<x>}
 
+
+\newpage
+\section{Conversions to function pointers}
+A capture-less polymorphic lambda with structured binding parameters can also
+be converted to a plain function pointer.  Just like a regular polyorphic
+lambda
+
+\begin{lstlisting}
+auto f_ptr = static_cast<void (*) (std::tuple<int, int>)>([](auto [a, b]){});
+\end{lstlisting}
+
+So another conversion operator needs to be added to the expansion of the
+polymorphic lambda with structured bindings above
+
+\begin{lstlisting}
+auto lambda = [](auto [one, two]) { ... };
+
+/**
+ * Expansion of the above lambda in C++14 form with respect to overloading
+ */
+struct ANONYMOUS_LAMBDA {
+    template <std::decomposable<2> Type>
+    auto operator()(const Type instance) const {
+        auto& [one, two] = instance;
+        ...
+    }
+
+private:
+    /**
+     * Cannot use operator() because that will either cause moves or copies,
+     * elision isn't guaranteed to happen to function parameters (even in
+     * return values)
+     */
+    template <std::decomposable<2> Type>
+    static auto invoke(const Type instance) {
+        auto& [key, value] = instance;
+        ...
+    }
+
+public:
+    /**
+     * Enforce the decomposable requirement on the argument of the function
+     */
+    template <typename Return, std::decomposable<2> Arg>
+    operator Return(*)(Arg)() const {
+        return &invoke;
+    }
+};
+\end{lstlisting}
+
+And like regular polymorphic lambdas, returning the address of the static
+function invokes an instantiation of the function with the types used in the
+conversion operator
 
 \section{Exceptions}
 Exceptions during "unwrapping" (if, for example a member or free ADL defined
