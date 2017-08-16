@@ -104,3 +104,159 @@ the structured bindings decomposition.  This concept holds if a type is
 forth by `[dcl.struct.bind]` paragraphs 2, 3 and 4.
 
 
+## Impact on overloading and function resolution
+Lambdas do not natively support function overloading, however one can lay out
+lambdas in a way that they are overloaded, for example
+
+```c++
+template <typename... Types> struct Overload { using Types::operator()...; };
+template <typename... Types> Overload(Types...) -> Overload<Types...>;
+
+namespace {
+    auto one = [](int) {};
+    auto two = [](char) {};
+    auto overloaded = Overload{one, two};
+} // namespace <anonymous>
+```
+
+And in such a situation the consequences of this proposal must be considered.
+The easiest way to understand this proposal is to consider the rough syntactic
+sugar that this provides.  A polymorphic lambda with a structured binding
+declaration translates to a simple functor with a templated `operator()`
+method with the structured binding "decomposition" happening inside the
+function
+
+```c++
+auto lambda = [](const auto [key, value]) { ... };
+
+/**
+ * Expansion of the above lambda in C++17 form with respect to overloading
+ */
+struct ANONYMOUS_LAMBDA {
+    template <std::decomposable<2> Type>
+    auto operator()(const Type instance) const {
+        auto& [key, value] = instance;
+        ...
+    }
+};
+```
+
+(Note that the above is just for illustration purposes.  It has some
+differences with the way such a lambda would translate into real code - for
+example, returning a value from the structured bindings in the initialization
+would not be a candidate for NRVO because of the explicit disallowance in
+`[class.copy.elision]`, but here it might be)
+
+Given the above expansion, a polymorphic lambda behaves identically to a
+lambda with a \textt{auto} parameter type with the difference that these are
+constrained to work only with parameters that are `x` decomposable.  And
+nothing special happens when overloading
+
+```c++
+template <typename... Types> struct Overload { using Types::operator()...; };
+template <typename... Types> Overload(Types...) -> Overload<Types...>;
+
+namespace {
+    auto one = [](int) {};
+    auto two = [](auto [key, value]) {};
+    auto overloaded = Overload{one, two};
+} // namespace <anonymous>
+
+int main() {
+    auto integer = int{1};
+    auto pair = std::make_pair(1, 2);
+    auto error = double{1};
+
+    // calls the lambda named "one"
+    overloaded(integer);
+    // calls the lamdba named "two"
+    overloaded(pair);
+    // error
+    overloaded(error);
+}
+```
+
+One key point to consider here is that the concept based constraints on such
+lambdas allows for the following two orthogonal overloads to work nicely with
+each other
+
+```c++
+namespace {
+    auto lambda_one = [](auto [one, two]) {};
+    auto lambda_two = [](auto [one, two, three]) {};
+    auto overloaded = Overload{lambda_one, lambda_two};
+} // namespace <anonymous>
+
+int main() {
+    auto tup_one = std::make_tuple(1, 2);
+    auto tup_two = std::make_tuple(1, 2, 2);
+    overloaded(tup_one);
+    overloaded(tup_two);
+
+    return 0;
+}
+```
+
+Since here either one lambda can be called or both, in no case can both
+satisfy the requirements set forth by the compiler concept
+`std::decomposable<x>`
+
+
+## Conversions to function pointers
+A capture-less polymorphic lambda with structured binding parameters can also
+be converted to a plain function pointer.  Just like a regular polyorphic
+lambda
+
+```c++
+auto f_ptr = static_cast<void (*) (std::tuple<int, int>)>([](auto [a, b]){});
+```
+
+So another conversion operator needs to be added to the expansion of the
+polymorphic lambda with structured bindings above
+
+```c++
+auto lambda = [](const auto [one, two]) { ... };
+
+/**
+ * Expansion of the above lambda in C++17 form with respect to overloading
+ */
+struct ANONYMOUS_LAMBDA {
+    template <std::decomposable<2> Type>
+    auto operator()(const Type instance) const {
+        auto& [one, two] = instance;
+        ...
+    }
+
+private:
+    /**
+     * Cannot use operator() because that will either cause moves or copies,
+     * elision isn't guaranteed to happen to function parameters (even in
+     * return values)
+     */
+    template <std::decomposable<2> Type>
+    static auto invoke(const Type instance) {
+        auto& [key, value] = instance;
+        ...
+    }
+
+public:
+    /**
+     * Enforce the decomposable requirement on the argument of the function
+     */
+    template <typename Return, std::decomposable<2> Arg>
+    operator Return(*)(Arg)() const {
+        return &invoke;
+    }
+};
+```
+
+And like regular polymorphic lambdas, returning the address of the static
+function invokes an instantiation of the function with the types used in the
+conversion operator
+
+## Exceptions
+Exceptions during "unwrapping" (if, for example a member or free ADL defined
+`get<>` throws) will propagate from the call site, just as with regular
+polymorphic lambdas
+
+
