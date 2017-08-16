@@ -1,6 +1,6 @@
 # Structured bindings with polymorphic lambdas
 ### Aaryaman Sagar (rmn100@gmail.com)
-### August 14, 2017
+#### August 14, 2017
 
 ## Introduction
 
@@ -43,7 +43,8 @@ std::find_if(range, [](const auto& [key, value]) {
 ### Programmer demand
 There is some programmer demand and uniform agreement on this feature
 
-* [Stack Overflow - Can the structured bindings syntax be used in polymorphic lambdas](https://stackoverflow.com/questions/45541334)
+* [Stack Overflow - Can the structured bindings syntax be used in
+    polymorphic lambdas](https://stackoverflow.com/questions/45541334)
 * [ISO C++ : Structured bindings and polymorphic lambdas](https://goo.gl/fRSwNg)
 
 ### Prevalence
@@ -76,7 +77,7 @@ The proposal describes a pure language extension which is a non-breaking
 change - code that was previously ill-formed now would have well-defined
 semantics.
 
-##
+## Interaction with concepts
 If a type can be decomposed into a structured binding expression with
 `x` bindings, then it is said to be `x-decomposable` (reference
 `[dcl.struct.bind]` for the exact requirements).  Any compiler
