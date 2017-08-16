@@ -167,7 +167,7 @@ happening inside the function
 auto lambda = [](const auto [key, value]) { ... };
 
 /**
- * Expansion of the above lambda in C++14 form with respect to overloading
+ * Expansion of the above lambda in C++17 form with respect to overloading
  */
 struct ANONYMOUS_LAMBDA {
     template <std::decomposable<2> Type>
@@ -181,8 +181,8 @@ struct ANONYMOUS_LAMBDA {
 (Note that the above is just for illustration purposes.  It has some
 differences with the way such a lambda would translate into real code - for
 example, returning a value from the structured bindings in the initialization
-would not be a candidate for NRVO in any case because of the explicit
-disallowance in \texttt{[class.copy.elision]}, but here it might be)
+would not be a candidate for NRVO because of the explicit disallowance in
+\texttt{[class.copy.elision]}, but here it might be)
 
 Given the above expansion, a polymorphic lambda behaves identically to a
 lambda with a \textt{auto} parameter type with the difference that these are
@@ -213,9 +213,9 @@ int main() {
 }
 \end{lstlisting}
 
-Further, one key point to consider here is that the concept based constraints
-on such lambdas allows for the following two orthogonal overloads to work
-nicely with each other
+One key point to consider here is that the concept based constraints on such
+lambdas allows for the following two orthogonal overloads to work nicely with
+each other
 
 \begin{lstlisting}
 namespace {
@@ -252,10 +252,10 @@ So another conversion operator needs to be added to the expansion of the
 polymorphic lambda with structured bindings above
 
 \begin{lstlisting}
-auto lambda = [](auto [one, two]) { ... };
+auto lambda = [](const auto [one, two]) { ... };
 
 /**
- * Expansion of the above lambda in C++14 form with respect to overloading
+ * Expansion of the above lambda in C++17 form with respect to overloading
  */
 struct ANONYMOUS_LAMBDA {
     template <std::decomposable<2> Type>
