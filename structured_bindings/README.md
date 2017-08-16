@@ -1,5 +1,5 @@
 # Structured bindings with polymorphic lambdas
-### Aaryaman Sagar
+### Aaryaman Sagar (rmn100@gmail.com)
 ### August 14, 2017
 
 ## Introduction
