@@ -26,6 +26,13 @@
 \usepackage{soul}
 \usepackage{color}
 \DeclareRobustCommand{\hlgreen}[1]{{\sethlcolor{green}\hl{#1}}}
+\newcommand*\justify{%
+  \fontdimen2\font=0.4em% interword space
+  \fontdimen3\font=0.2em% interword stretch
+  \fontdimen4\font=0.1em% interword shrink
+  \fontdimen7\font=0.1em% extra space
+  \hyphenchar\font=`\-% allowing hyphenation
+}
 % \usepackage{concmath}
 % \usepackage[T1]{fontenc}
 % ********************************* HEADERS ***********************************
@@ -305,7 +312,7 @@ polymorphic lambdas
 Change in section 8.1.5.1 ([expr.prim.lambda.closure]) paragraph 3
 
 For a generic lambda, the closure type has a public inline function call
-operator member template (17.5.2) whose \texttt{template-parameter-list}
+operator member template (17.5.2) whose \texttt{\justify template-parameter-list}
 consists of one invented type \texttt{template-parameter} for each occurrence
 of \texttt{auto} in the lambda’s \texttt{parameter-declaration-clause}, in
 order of appearance.  \hlgreen{For each occurrence of a structured binding with
@@ -325,4 +332,3 @@ the decl-specifiers of the \texttt{parameter-declaration-clause} with the name
 of the corresponding invented \texttt{template-parameter}.
 
 \end{document}
-
