@@ -23,6 +23,9 @@
 \usepackage{parskip}
 \usepackage{indentfirst}
 \setlength{\droptitle}{-4em}
+\usepackage{soul}
+\usepackage{color}
+\DeclareRobustCommand{\hlgreen}[1]{{\sethlcolor{green}\hl{#1}}}
 % \usepackage{concmath}
 % \usepackage[T1]{fontenc}
 % ********************************* HEADERS ***********************************
@@ -295,6 +298,31 @@ conversion operator
 Exceptions during "unwrapping" (if, for example a member or free ADL defined
 \texttt{get<>} throws) will propagate from the call site, just as with regular
 polymorphic lambdas
+
+
+\newpage
+\section{Changes to the current C++17 standard}
+Change in section 8.1.5.1 ([expr.prim.lambda.closure]) paragraph 3
+
+For a generic lambda, the closure type has a public inline function call
+operator member template (17.5.2) whose \texttt{template-parameter-list}
+consists of one invented type \texttt{template-parameter} for each occurrence
+of \texttt{auto} in the lambda’s \texttt{parameter-declaration-clause}, in
+order of appearance.  \hlgreen{For each occurrence of a structured binding with
+cardinality \texttt{x}, the \texttt{template-parameter-list} an invented type
+\texttt{template-parameter} with the constraint that it has to be decomposable
+into \texttt{x} structured bindings (see \texttt{[dcl.struct.bind]}).  And as
+such the function template only participates in overloading when all the
+structured bindings are appropriately decomposable at the call site.} The
+invented type \hlgreen{(not from a structured binding
+\texttt{parameter-declaration})} \texttt{template-parameter} is a parameter
+pack if the corresponding \texttt{parameter-declaration} declares a function
+parameter pack (11.3.5).  The return type and function parameters of the
+function call operator template are derived from the
+\texttt{lambda-expression}’s \texttt{trailing-return-type} and
+\texttt{parameter-declaration-clause} by replacing each occurrence of auto in
+the decl-specifiers of the \texttt{parameter-declaration-clause} with the name
+of the corresponding invented \texttt{template-parameter}.
 
 \end{document}
 
