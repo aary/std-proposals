@@ -182,7 +182,7 @@ struct ANONYMOUS_LAMBDA {
 differences with the way such a lambda would translate into real code - for
 example, returning a value from the structured bindings in the initialization
 would not be a candidate for NRVO in any case because of the explicit
-disallowance in \texttt{[class.copy.elision]})
+disallowance in \texttt{[class.copy.elision]}, but here it might be)
 
 Given the above expansion, a polymorphic lambda behaves identically to a
 lambda with a \textt{auto} parameter type with the difference that these are
