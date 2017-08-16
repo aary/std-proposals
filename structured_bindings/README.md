@@ -43,8 +43,8 @@ std::find_if(range, [](const auto& [key, value]) {
 ### Programmer demand
 There is some programmer demand and uniform agreement on this feature
 
-    * [Stack Overflow - Can the structured bindings syntax be used in polymorphic lambdas]{https://stackoverflow.com/questions/45541334}
-    * [ISO C++ : Structured bindings and polymorphic lambdas](https://goo.gl/fRSwNg)
+* [Stack Overflow - Can the structured bindings syntax be used in polymorphic lambdas](https://stackoverflow.com/questions/45541334)
+* [ISO C++ : Structured bindings and polymorphic lambdas](https://goo.gl/fRSwNg)
 
 ### Prevalence
 It is not uncommon to execute algorithms on containers that contain a value
@@ -148,7 +148,7 @@ would not be a candidate for NRVO because of the explicit disallowance in
 `[class.copy.elision]`, but here it might be)
 
 Given the above expansion, a polymorphic lambda behaves identically to a
-lambda with a \textt{auto} parameter type with the difference that these are
+lambda with a `auto` parameter type with the difference that these are
 constrained to work only with parameters that are `x` decomposable.  And
 nothing special happens when overloading
 
