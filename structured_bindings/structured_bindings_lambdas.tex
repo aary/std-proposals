@@ -175,7 +175,8 @@ defined.
 
 \section{Impact on overloading and function resolution}
 Lambdas do not natively support function overloading, however one can lay out
-lambdas in a way that they are overloaded, for example
+lambdas in a way that they are overloaded, for example let's assume the
+following definition of \texttt{make\_overload()} for the rest of the paper
 
 \begin{lstlisting}
 template <typename... Types>
@@ -187,7 +188,12 @@ template <typename... Types>
 auto make_overload(Types&&... instances) {
     return Overload<std::decay_t<Types>...>{std::forward<Types>(instances)...};
 }
+\end{lstlisting}
 
+Now this can be used like so to generate a functor with overloaded
+\texttt{operator()} methods from anonymous lambdas
+
+\begin{lstlisting}
 namespace {
     auto one = [](int) {};
     auto two = [](char) {};
@@ -195,8 +201,8 @@ namespace {
 } // namespace <anonymous>
 \end{lstlisting}
 
-And in such a situation the consequences of this proposal must be considered.
-The easiest way to understand this proposal is to consider the rough syntactic
+In such a situation the consequences of this proposal must be considered.  The
+easiest way to understand this proposal is to consider the rough syntactic
 sugar that this provides.  A polymorphic lambda with a structured binding
 declaration translates to a simple functor with a templated
 \texttt{operator()} method with the structured binding "decomposition"
@@ -224,22 +230,20 @@ example, returning a value from the structured bindings in the initialization
 would not be a candidate for NRVO because of the explicit disallowance in
 \texttt{[class.copy.elision]}, but here it might be.
 
+Another difference here is that the introduced bindings are lvalue references
+to the referenced type of the bindings.  In the actual code they would
+conditionally be lvalue references or rvalue references depending on the value
+category of the corresponding initializer.  The referenced type of the
+bindings however, would remain the same in both cases; so the change in the
+actual reference type of the bindings can be considered a mere implementation
+detail.
+
 Given the above expansion, a polymorphic lambda behaves identically to a
 lambda with a \textt{auto} parameter type with the difference that these are
 constrained to work only with parameters that are \texttt{x} decomposable.
 And nothing special happens when overloading
 
 \begin{lstlisting}
-template <typename... Types>
-struct Overload : public Types... {
-    template <typename... T>
-    Overload(T&&... types) : Types{std::forward<T>(types)}... {}
-};
-template <typename... Types>
-auto make_overload(Types&&... instances) {
-    return Overload<std::decay_t<Types>...>{std::forward<Types>(instances)...};
-}
-
 namespace {
     auto one = [](int) {};
     auto two = [](auto [key, value]) {};
