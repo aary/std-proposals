@@ -122,32 +122,43 @@ change - code that was previously ill-formed now would have well-defined
 semantics.
 
 
-\section{Interaction with concepts}
-If a type can be decomposed into a structured binding expression with
-\texttt{x} bindings, then it is said to be \texttt{x-decomposable} (reference
-\texttt{[dcl.struct.bind]} for the exact requirements).  More specifically, if
-the following expression is well formed for a type \texttt{T}
+\section{Interaction with concepts and traits}
+\textbf{Definition (\texttt{x-decomposable})} If a type can be decomposed into
+a structured binding expression with \texttt{x} bindings, then it is said to
+be \texttt{x-decomposable} (reference \texttt{[dcl.struct.bind]} for the exact
+requirements).  More specifically, if the following expression is well formed
+for a type \texttt{T}
 \begin{lstlisting}
 auto&& [one, two, three, ... , x] = o;
 \end{lstlisting}
 Where \texttt{decltype(o)} is \texttt{T}, then the type \texttt{T} is said to
 be \texttt{x-decomposable}
 
-This can be made available to the compiler as both a concept and a trait.
-The presence of such a concept makes it easy to define templates in terms of a
-type that is \texttt{x-decomposable}, whereas a trait allows for the same
-thing but also fits well with existing code that employs value driven template
-specialization mechanisms.
+This can be made available to the compiler as both a concept and a trait.  The
+presence of such a concept makes it easy to define templates in terms of a
+type that is \texttt{x-decomposable}.  A trait allows for the same thing but
+can be considered more versatile as it also fits well with existing code that
+employs value driven template specialization mechanisms and other more
+complicated specialization workflows.
 
-Part of such a concept can be made using the tools available to the
-programmer.  In particular, it is possible to make a concept or SFINAE trait
-that enables us to check if a type is decomposable into \texttt{x} bindings by
-inspecting it's interface.  In particular the presence of an ADL defined or
-member \texttt{get<>()} function and the existence of specialized
-\texttt{std::tuple\_element<>} and \texttt{std::tuple\_size<>} traits
-qualifies something to be \texttt{x-decomposable}.  However, a type can be
-\texttt{x-decomposable} even when these are not present (see
-\texttt{[dcl.struct.bind]}p4)
+It is possible to make a concept or SFINAE trait that enables us to check if a
+type is decomposable into \texttt{x} bindings by inspecting it's interface.
+In particular the presence of an ADL defined or member \texttt{get<>()}
+function and the existence of specialized \texttt{std::tuple\_element<>} and
+\texttt{std::tuple\_size<>} traits qualifies something to be
+\texttt{x-decomposable}.  However, a type can be \texttt{x-decomposable} even
+when these are not present (see \texttt{[dcl.struct.bind]}p4)
+
+\texttt{[dcl.struct.bind]}p2 and \texttt{[dcl.struct.bind]}p3 define
+decomposability that can be checked by the programmer at compile time
+(described above) via a concept or SFINAE trait.  However
+\texttt{[dcl.struct.bind]}p4 describes a method of unpacking that cannot be
+enforced purely by the language constructs available as of C++17.  As such a
+compiler intrinsic, say \texttt{\_\_is\_decomposable<T, x>} is required.
+Given such an intrinsic, defining a trait and concept that check if a type is
+\texttt{x-decomposable} on top of that is trivial.  The trait itself can be
+used as a backend for the concept, leaving its implementation entirely in user
+code without the help of compiler intrinsics.
 
 The concept, say \texttt{std::decomposable<x>} accepts a non type template
 parameter of type \texttt{std::size\_t} that determines the cardinality of the
@@ -155,18 +166,11 @@ structured bindings decomposition.  This concept holds if a type is
 \texttt{x-decomposable} (and this will take into consideration the
 requirements set forth by \texttt{[dcl.struct.bind]} paragraphs 2, 3 and 4.
 
-The corresponding trait, say \texttt{std::is\_decomposable<T, x>} inherits from either \texttt{std::true\_type} or
-\justify{\texttt{std::false\_type}} based on whether the type \texttt{T} is
-\texttt{x-decomposable}.  The usual variable template
-\texttt{std::is\_decomposable\_v<T, x>} should also be defined.
-
-From the current working draft of the C++17 standard
-\texttt{[dcl.struct.bind]}p2 and \texttt{[dcl.struct.bind]}p3 define
-decomposability that can be checked by the programmer at compile time
-(described above) via a concept or SFINAE trait.  However
-\texttt{[dcl.struct.bind]}p4 describes a method of unpacking that cannot be
-enforced purely by the language constructs available as of C++17.  As such a
-concept provided by the compiler is required.
+The corresponding trait, say \texttt{std::is\_decomposable<T, x>} inherits
+from either \texttt{std::true\_type} or \justify{\texttt{std::false\_type}}
+based on whether the type \texttt{T} is \texttt{x-decomposable}.  The usual
+variable template \texttt{std::is\_decomposable\_v<T, x>} should also be
+defined.
 
 
 \section{Impact on overloading and function resolution}
@@ -210,11 +214,12 @@ struct ANONYMOUS_LAMBDA {
 };
 \end{lstlisting}
 
-(Note that the above is just for illustration purposes.  It has some
+Note that although this expansion has almost the same semantics as the actual
+lambda.  The above is just for illustration purposes.  It has some
 differences with the way such a lambda would translate into real code - for
 example, returning a value from the structured bindings in the initialization
 would not be a candidate for NRVO because of the explicit disallowance in
-\texttt{[class.copy.elision]}, but here it might be)
+\texttt{[class.copy.elision]}, but here it might be.
 
 Given the above expansion, a polymorphic lambda behaves identically to a
 lambda with a \textt{auto} parameter type with the difference that these are
