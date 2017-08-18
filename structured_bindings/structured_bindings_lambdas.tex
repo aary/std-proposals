@@ -212,7 +212,7 @@ happening inside the function
 auto lambda = [](const auto [key, value]) { ... };
 
 /**
- * Expansion of the above lambda in C++17 form with respect to overloading
+ * Expansion of the above lambda
  */
 struct ANONYMOUS_LAMBDA {
     template <std::decomposable<2> Type>
@@ -226,17 +226,12 @@ struct ANONYMOUS_LAMBDA {
 Note that although this expansion has almost the same semantics as the actual
 lambda.  The above is just for illustration purposes.  It has some
 differences with the way such a lambda would translate into real code - for
-example, returning a value from the structured bindings in the initialization
-would not be a candidate for NRVO because of the explicit disallowance in
-\texttt{[class.copy.elision]}, but here it might be.
-
-Another difference here is that the introduced bindings are lvalue references
-to the referenced type of the bindings.  In the actual code they would
-conditionally be lvalue references or rvalue references depending on the value
-category of the corresponding initializer.  The referenced type of the
-bindings however, would remain the same in both cases; so the change in the
-actual reference type of the bindings can be considered a mere implementation
-detail.
+example, The introduced bindings are lvalue references to the referenced type
+of the bindings.  In the actual code they would conditionally be lvalue
+references or rvalue references depending on the value category of the
+corresponding initializer.  The referenced type of the bindings however, would
+remain the same in both cases; so the change in the actual reference type of
+the bindings can be considered a mere implementation detail.
 
 Given the above expansion, a polymorphic lambda behaves identically to a
 lambda with a \textt{auto} parameter type with the difference that these are
