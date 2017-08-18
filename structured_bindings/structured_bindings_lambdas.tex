@@ -180,15 +180,18 @@ lambdas in a way that they are overloaded, for example
 \begin{lstlisting}
 template <typename... Types>
 struct Overload : public Types... {
-    using Types::operator()...;
+    template <typename... T>
+    Overload(T&&... types) : Types{std::forward<T>(types)}... {}
 };
 template <typename... Types>
-Overload(Types...) -> Overload<Types...>;
+auto make_overload(Types&&... instances) {
+    return Overload<std::decay_t<Types>...>{std::forward<Types>(instances)...};
+}
 
 namespace {
     auto one = [](int) {};
     auto two = [](char) {};
-    auto overloaded = Overload{one, two};
+    auto overloaded = make_overload(one, two);
 } // namespace <anonymous>
 \end{lstlisting}
 
@@ -229,15 +232,18 @@ And nothing special happens when overloading
 \begin{lstlisting}
 template <typename... Types>
 struct Overload : public Types... {
-    using Types::operator()...;
+    template <typename... T>
+    Overload(T&&... types) : Types{std::forward<T>(types)}... {}
 };
 template <typename... Types>
-Overload(Types...) -> Overload<Types...>;
+auto make_overload(Types&&... instances) {
+    return Overload<std::decay_t<Types>...>{std::forward<Types>(instances)...};
+}
 
 namespace {
     auto one = [](int) {};
     auto two = [](auto [key, value]) {};
-    auto overloaded = Overload{one, two};
+    auto overloaded = make_overload(one, two);
 } // namespace <anonymous>
 
 int main() {
@@ -262,7 +268,7 @@ each other
 namespace {
     auto lambda_one = [](auto [one, two]) {};
     auto lambda_two = [](auto [one, two, three]) {};
-    auto overloaded = Overload{lambda_one, lambda_two};
+    auto overloaded = make_overload(lambda_one, lambda_two);
 } // namespace <anonymous>
 
 int main() {
