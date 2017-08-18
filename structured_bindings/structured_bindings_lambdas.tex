@@ -155,9 +155,8 @@ structured bindings decomposition.  This concept holds if a type is
 \texttt{x-decomposable} (and this will take into consideration the
 requirements set forth by \texttt{[dcl.struct.bind]} paragraphs 2, 3 and 4.
 
-Similarly this trait, say \texttt{std::is\_decomposable<T, x>} is a trait
-that inherits from either \texttt{std::true\_type} or
-\texttt{std::false\_type} based on whether the type \texttt{T} is
+The corresponding trait, say \texttt{std::is\_decomposable<T, x>} inherits from either \texttt{std::true\_type} or
+\justify{\texttt{std::false\_type}} based on whether the type \texttt{T} is
 \texttt{x-decomposable}.  The usual variable template
 \texttt{std::is\_decomposable\_v<T, x>} should also be defined.
 
@@ -380,4 +379,3 @@ struct is_decomposable;
 \texttt{x-decomposable} (see \texttt{[expr.prim.lambda.closure]}p3)}
 
 \end{document}
-
