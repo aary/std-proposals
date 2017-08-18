@@ -146,7 +146,8 @@ inspecting it's interface.  In particular the presence of an ADL defined or
 member \texttt{get<>()} function and the existence of specialized
 \texttt{std::tuple\_element<>} and \texttt{std::tuple\_size<>} traits
 qualifies something to be \texttt{x-decomposable}.  However, a type can be
-\texttt{x-decomposable} even when these are not present.
+\texttt{x-decomposable} even when these are not present (see
+\texttt{[dcl.struct.bind]}p4)
 
 The concept, say \texttt{std::decomposable<x>} accepts a non type template
 parameter of type \texttt{std::size\_t} that determines the cardinality of the
