@@ -45,8 +45,8 @@
 
 \section{Introduction}
 
-This paper proposes usage of structured with polymorphic lambdas, adding them
-to another place where \texttt{auto} can be used as a declarator
+This paper proposes usage of structured bindings with polymorphic lambdas,
+adding them to another place where \texttt{auto} can be used as a declarator
 
 \begin{lstlisting}
 auto map = std::map<int, int>{{1, 2}, {3, 4}};
@@ -125,30 +125,48 @@ semantics.
 \section{Interaction with concepts}
 If a type can be decomposed into a structured binding expression with
 \texttt{x} bindings, then it is said to be \texttt{x-decomposable} (reference
-\texttt{[dcl.struct.bind]} for the exact requirements).  Any compiler
-diagnostics provided are the same as that for regular structured bindings
-initializations - a compiler concept that determines if a type is
-\texttt{x-decomposable}.
+\texttt{[dcl.struct.bind]} for the exact requirements).  More specifically, if
+the following expression is well formed for a type \texttt{T}
+\begin{lstlisting}
+auto&& [one, two, three, ... , x] = o;
+\end{lstlisting}
+Where \texttt{decltype(o)} is \texttt{T}, then the type \texttt{T} is said to
+be \texttt{x-decomposable}
+
+This can be made available to the compiler as both a concept and a trait.
+The presence of such a concept makes it easy to define templates in terms of a
+type that is \texttt{x-decomposable}, whereas a trait allows for the same
+thing but also fits well with existing code that employs value driven template
+specialization mechanisms.
 
 Part of such a concept can be made using the tools available to the
 programmer.  In particular, it is possible to make a concept or SFINAE trait
-that enables us to check if a type is decomposable via a member or ADL defined
-free \texttt{get<>()} method/function and the existence of a specialized
-\texttt{std::tuple\_size<>} and \texttt{std::tuple\_size<>} traits
+that enables us to check if a type is decomposable into \texttt{x} bindings by
+inspecting it's interface.  In particular the presence of an ADL defined or
+member \texttt{get<>()} function and the existence of specialized
+\texttt{std::tuple\_element<>} and \texttt{std::tuple\_size<>} traits
+qualifies something to be \texttt{x-decomposable}.  However, a type can be
+\texttt{x-decomposable} even when these are not present.
+
+The concept, say \texttt{std::decomposable<x>} accepts a non type template
+parameter of type \texttt{std::size\_t} that determines the cardinality of the
+structured bindings decomposition.  This concept holds if a type is
+\texttt{x-decomposable} (and this will take into consideration the
+requirements set forth by \texttt{[dcl.struct.bind]} paragraphs 2, 3 and 4.
+
+Similarly this trait, say \texttt{std::is\_decomposable<T, x>} is a trait
+that inherits from either \texttt{std::true\_type} or
+\texttt{std::false\_type} based on whether the type \texttt{T} is
+\texttt{x-decomposable}.  The usual variable template
+\texttt{std::is\_decomposable\_v<T, x>} should also be defined.
 
 From the current working draft of the C++17 standard
 \texttt{[dcl.struct.bind]}p2 and \texttt{[dcl.struct.bind]}p3 define
-decomposability that can be checked by the programmer at compile time via a
-concept or SFINAE trait.  However \texttt{[dcl.struct.bind]}p4 describes a
-method of unpacking that cannot be enforced purely by the language constructs
-available as of C++17.  As such a concept provided by the compiler is
-required.
-
-This concept \texttt{std::decomposable<x>} shall be a concept that accepts a
-non type template parameter of type \texttt{std::size\_t} that determines the
-cardinality of the structured bindings decomposition.  This concept holds if a
-type is \texttt{x-decomposable} (and this will take into consideration the
-requirements set forth by \texttt{[dcl.struct.bind]} paragraphs 2, 3 and 4.
+decomposability that can be checked by the programmer at compile time
+(described above) via a concept or SFINAE trait.  However
+\texttt{[dcl.struct.bind]}p4 describes a method of unpacking that cannot be
+enforced purely by the language constructs available as of C++17.  As such a
+concept provided by the compiler is required.
 
 
 \section{Impact on overloading and function resolution}
@@ -156,8 +174,12 @@ Lambdas do not natively support function overloading, however one can lay out
 lambdas in a way that they are overloaded, for example
 
 \begin{lstlisting}
-template <typename... Types> struct Overload { using Types::operator()...; };
-template <typename... Types> Overload(Types...) -> Overload<Types...>;
+template <typename... Types>
+struct Overload : public Types... {
+    using Types::operator()...;
+};
+template <typename... Types>
+Overload(Types...) -> Overload<Types...>;
 
 namespace {
     auto one = [](int) {};
@@ -200,8 +222,12 @@ constrained to work only with parameters that are \texttt{x} decomposable.
 And nothing special happens when overloading
 
 \begin{lstlisting}
-template <typename... Types> struct Overload { using Types::operator()...; };
-template <typename... Types> Overload(Types...) -> Overload<Types...>;
+template <typename... Types>
+struct Overload : public Types... {
+    using Types::operator()...;
+};
+template <typename... Types>
+Overload(Types...) -> Overload<Types...>;
 
 namespace {
     auto one = [](int) {};
@@ -309,26 +335,49 @@ polymorphic lambdas
 
 \newpage
 \section{Changes to the current C++17 standard}
-Change in section 8.1.5.1 ([expr.prim.lambda.closure]) paragraph 3
+\subsection{Section 8.1.5.1 (\texttt{[expr.prim.lambda.closure]}) paragraph 3}
 
 For a generic lambda, the closure type has a public inline function call
 operator member template (17.5.2) whose \texttt{\justify template-parameter-list}
 consists of one invented type \texttt{template-parameter} for each occurrence
 of \texttt{auto} in the lambda’s \texttt{parameter-declaration-clause}, in
 order of appearance.  \hlgreen{For each occurrence of a structured binding with
-cardinality \texttt{x}, the \texttt{template-parameter-list} an invented type
-\texttt{template-parameter} with the constraint that it has to be decomposable
-into \texttt{x} structured bindings (see \texttt{[dcl.struct.bind]}).  And as
-such the function template only participates in overloading when all the
-structured bindings are appropriately decomposable at the call site.} The
-invented type \hlgreen{(not from a structured binding
-\texttt{parameter-declaration})} \texttt{template-parameter} is a parameter
-pack if the corresponding \texttt{parameter-declaration} declares a function
-parameter pack (11.3.5).  The return type and function parameters of the
-function call operator template are derived from the
-\texttt{lambda-expression}’s \texttt{trailing-return-type} and
-\texttt{parameter-declaration-clause} by replacing each occurrence of auto in
-the decl-specifiers of the \texttt{parameter-declaration-clause} with the name
-of the corresponding invented \texttt{template-parameter}.
+cardinality \texttt{x}, the \texttt{template-parameter-list} consists of an
+invented type \texttt{template-parameter} with the constraint that it has to
+be decomposable into \texttt{x} structured bindings (see
+\texttt{[dcl.struct.bind]}).  And as such the function template only
+participates in overloading when all the structured bindings are appropriately
+decomposable at the call site.} The invented type \texttt{template-parameter}
+is a parameter pack if the corresponding \texttt{parameter-declaration}
+declares a function parameter pack (11.3.5).  \hlgreen{A structured binding
+\texttt{parameter-declaration} cannot be used to invent a parameter pack.} The
+return type and function parameters of the function call operator template are
+derived from the \texttt{lambda-expression}’s \texttt{trailing-return-type}
+and \texttt{parameter-declaration-clause} by replacing each occurrence of auto
+in the decl-specifiers of the \texttt{parameter-declaration-clause} with the
+name of the corresponding invented \texttt{template-parameter}.
+
+
+\subsection{Section 11.5 (\texttt{[dcl.struct.bind]})}
+
+\hlgreen{5.  If the number of structured bindings introduced by a structured
+binding declaration is \texttt{x}, then a type \texttt{T} is called
+\texttt{x-decomposable} if the following is well formed}
+\begin{lstlisting}
+auto&& [one, two, three, ... , x] = o;
+\end{lstlisting}
+
+\hlgreen{where \texttt{T} is \texttt{decltype(o)}}
+
+\subsection{Section 23.15.4.3 Type properties \texttt{[meta.unary.prop]}}
+
+\begin{lstlisting}
+template <typename T, std::size_t X>
+struct is_decomposable;
+\end{lstlisting}
+
+\hlgreen{\textbf{Condition} The type \texttt{T} has to be
+\texttt{x-decomposable} (see \texttt{[expr.prim.lambda.closure]}p3)}
 
 \end{document}
+
