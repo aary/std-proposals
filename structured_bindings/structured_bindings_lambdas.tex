@@ -141,17 +141,17 @@ can be considered more versatile as it also fits well with existing code that
 employs value driven template specialization mechanisms and other more
 complicated specialization workflows.
 
-It is possible to make a concept or SFINAE trait that enables us to check if a
-type is decomposable into \texttt{x} bindings by inspecting it's interface.
-In particular the presence of an ADL defined or member \texttt{get<>()}
-function and the existence of specialized \texttt{std::tuple\_element<>} and
+It is possible to make a concept or trait that enables us to check if a type
+is decomposable into \texttt{x} bindings by inspecting it's interface.  In
+particular the presence of an ADL defined or member \texttt{get<>()} function
+and the existence of specialized \texttt{std::tuple\_element<>} and
 \texttt{std::tuple\_size<>} traits qualifies something to be
 \texttt{x-decomposable}.  However, a type can be \texttt{x-decomposable} even
 when these are not present (see \texttt{[dcl.struct.bind]}p4)
 
 \texttt{[dcl.struct.bind]}p2 and \texttt{[dcl.struct.bind]}p3 define
 decomposability that can be checked by the programmer at compile time
-(described above) via a concept or SFINAE trait.  However
+(described above) via a concept or trait.  However
 \texttt{[dcl.struct.bind]}p4 describes a method of unpacking that cannot be
 enforced purely by the language constructs available as of C++17.  As such a
 compiler intrinsic, say \texttt{\_\_is\_decomposable<T, x>} is required.
@@ -166,10 +166,9 @@ structured bindings decomposition.  This concept holds if a type is
 \texttt{x-decomposable} (and this will take into consideration the
 requirements set forth by \texttt{[dcl.struct.bind]} paragraphs 2, 3 and 4.
 
-The corresponding trait, say \texttt{std::is\_decomposable<T, x>} inherits
-from either \texttt{std::true\_type} or \justify{\texttt{std::false\_type}}
-based on whether the type \texttt{T} is \texttt{x-decomposable}.  The usual
-variable template \texttt{std::is\_decomposable\_v<T, x>} should also be
+The corresponding trait, say \texttt{std::is\_decomposable<T, x>} has value
+\texttt{true} if and only if type \texttt{T} is \texttt{x-decomposable}.  The
+usual variable template \texttt{std::is\_decomposable\_v<T, x>} should also be
 defined.
 
 
@@ -183,6 +182,8 @@ template <typename... Types>
 struct Overload : public Types... {
     template <typename... T>
     Overload(T&&... types) : Types{std::forward<T>(types)}... {}
+
+    using Types::operator()...
 };
 template <typename... Types>
 auto make_overload(Types&&... instances) {
@@ -291,7 +292,8 @@ be converted to a plain function pointer.  Just like a regular polyorphic
 lambda
 
 \begin{lstlisting}
-auto f_ptr = static_cast<void (*) (std::tuple<int, int>)>([](auto [a, b]){});
+using FPtr_t = void (*) (std::tuple<int, int>);
+auto f_ptr = static_cast<FPtr_t>([](auto [a, b]){});
 \end{lstlisting}
 
 So another conversion operator needs to be added to the expansion of the
