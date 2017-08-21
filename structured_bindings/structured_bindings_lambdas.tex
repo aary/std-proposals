@@ -183,7 +183,7 @@ struct Overload : public Types... {
     template <typename... T>
     Overload(T&&... types) : Types{std::forward<T>(types)}... {}
 
-    using Types::operator()...
+    using Types::operator()...;
 };
 template <typename... Types>
 auto make_overload(Types&&... instances) {
