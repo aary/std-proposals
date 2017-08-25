@@ -142,7 +142,7 @@ employs value driven template specialization mechanisms and other more
 complicated specialization workflows.
 
 It is possible to make a concept or trait that enables us to check if a type
-is decomposable into \texttt{x} bindings by inspecting it's interface.  In
+is decomposable into \texttt{x} bindings by virtue of it's interface.  In
 particular the presence of an ADL defined or member \texttt{get<>()} function
 and the existence of specialized \texttt{std::tuple\_element<>} and
 \texttt{std::tuple\_size<>} traits qualifies something to be
@@ -157,8 +157,8 @@ enforced purely by the language constructs available as of C++17.  As such a
 compiler intrinsic, say \texttt{\_\_is\_decomposable<T, x>} is required.
 Given such an intrinsic, defining a trait and concept that check if a type is
 \texttt{x-decomposable} on top of that is trivial.  The trait itself can be
-used as a backend for the concept, leaving its implementation entirely in user
-code without the help of compiler intrinsics.
+used as a backend for the concept, leaving the implementation of the concept
+entirely in portable code without the help of compiler intrinsics.
 
 The concept, say \texttt{std::decomposable<x>} accepts a non type template
 parameter of type \texttt{std::size\_t} that determines the cardinality of the
