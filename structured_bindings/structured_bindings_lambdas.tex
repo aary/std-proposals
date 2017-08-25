@@ -50,7 +50,7 @@ adding them to another place where \texttt{auto} can be used as a declarator
 
 \begin{lstlisting}
 auto map = std::map<int, int>{{1, 2}, {3, 4}};
-std::for_each((map, [](auto [key, value]) {
+std::for_each(map, [](auto [key, value]) {
     cout << key << " " << value << endl;
 });
 \end{lstlisting}
