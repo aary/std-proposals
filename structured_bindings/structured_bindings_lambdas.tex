@@ -205,7 +205,7 @@ In such a situation the consequences of this proposal must be considered.  The
 easiest way to understand this proposal is to consider the rough syntactic
 sugar that this provides.  A polymorphic lambda with a structured binding
 declaration translates to a simple functor with a templated
-\texttt{operator()} method with the structured binding "decomposition"
+\texttt{operator()} method with the structured binding decomposition
 happening inside the function
 
 \begin{lstlisting}
@@ -217,45 +217,44 @@ auto lambda = [](const auto [key, value]) { ... };
 struct ANONYMOUS_LAMBDA {
     template <std::decomposable<2> __Type>
     auto operator()(const __Type __instance) const {
-        auto& [key, value] = __instance;
+        auto&& [key, value] = std::move(__instance);
         ...
     }
 };
 \end{lstlisting}
 
-Note that although this expansion has almost the same semantics as the actual
-lambda.  The above is just for illustration purposes.  It has some
-differences with the way such a lambda would translate into real code - for
-example, the introduced bindings are lvalue references to the referenced type
-of the bindings.  In the actual code they would conditionally be lvalue
-references or rvalue references depending on the value category of the
-corresponding initializer.  The referenced type of the bindings however, would
-remain the same in both cases; so the change in the actual reference type of
-the bindings can be considered a mere implementation detail.
+The \texttt{std::move()} is added to force a conversion to xvalue type because
+the expression \texttt{e} (see \texttt{[dcl.struct.bind]p1}) is not an lvalue
+in the structured binding declaration, and when \texttt{e} is not an lvalue,
+the introduced bindings are decomposed as if \texttt{e} was an xvalue.  If
+\texttt{e} was an lvalue, (i.e.  if \texttt{\&} was used as the
+\texttt{ref-operator} or if \texttt{\&\&} was used and an lvalue was passed in
+to the lambda) then the \texttt{std::move()} will be omitted (see the next
+expansion for an example where \texttt{std::move()} is omitted)
 
 Similarly a lambda that has two seperate groups of structured binding
 declarations will translate with the decompositions happening serially within
-the function body
+the function body in order of binding declarations from left to right
 
 \begin{lstlisting}
-auto lambda = [](const auto [key, value], auto&& [one, two, three]) { ... };
+auto lambda = [](const auto [key, value], auto& [one, two, three]) { ... };
 
 /**
  * Expansion of the above lambda
  */
 struct ANONYMOUS_LAMBDA {
     template <std::decomposable<2> __One, std::decomposable<3> __Two>
-    auto operator()(const One __one, Two&& __two) {
-        auto& [key, value] = __one;
+    auto operator()(const One __one, Two& __two) {
+        auto&& [key, value] = std::move(__one);
         auto& [one, two, three] = __two;
         ...
     }
 };
 \end{lstlisting}
 
-Given the above expansions, a polymorphic lambda behaves identically to a
+Given the above expansions, a polymorphic lambda behaves almost identically to a
 lambda with a \textt{auto} parameter type with the difference that these are
-constrained to work only with parameters that are \texttt{x} decomposable.
+constrained to work only with parameters that are \texttt{x-decomposable}.
 And nothing special happens when overloading
 
 \begin{lstlisting}
@@ -352,7 +351,7 @@ void foo() {
     auto something = Something{};
     auto decomposer = Something::make_decomposer();
 
-	// the decomposition here happens in the scope of the lambda so is valid
+    // the decomposition here happens in the scope of the lambda so is valid
     decomposer(something);
 }
 \end{lstlisting}
@@ -380,7 +379,7 @@ auto lambda = [](const auto [one, two]) { ... };
 struct ANONYMOUS_LAMBDA {
     template <std::decomposable<2> __Type>
     auto operator()(const __Type __instance) const {
-        auto& [one, two] = __instance;
+        auto&& [one, two] = std::move(__instance);
         ...
     }
 
@@ -392,7 +391,7 @@ private:
      */
     template <std::decomposable<2> __Type>
     static auto __invoke(const __Type __instance) {
-        auto& [key, value] = __instance;
+        auto&& [key, value] = std::move(__instance);
         ...
     }
 
@@ -416,14 +415,17 @@ Any exceptions during copy/move construction of the instance which is to be
 decomposed being will be thrown from the call site, just as with regular
 polymorphic lambdas.  However, if there is an exception thrown during the
 decomposition process, for example if \texttt{get<>()} throws, that will
-propagate from within the lambda, so if a function level try catch block was
-allowed for a lambda that would catch an exception that was generated during
-the "decomposition" process.
+propagate from within the lambda.  So if function level try catch blocks were
+allowed for lambdas, those would catch any exceptions generated during the
+decomposition process, whereas exceptions from the copy/move construction for
+the creation of the entity \texttt{e} (see \texttt{[dcl.struct.bind]p1}) would
+not be caught by the imaginary function level try-catch block.
 
 
 \section{Acknowledgements}
 
-Thanks to Eric Niebler for the suggestions and the help with this paper!
+Thanks to Eric Niebler and Nicol Bolas for the suggestions and the help with
+this paper!
 
 
 \section{Changes to the current C++17 standard}
@@ -439,9 +441,9 @@ invented type \texttt{template-parameter} with the constraint that it has to
 be decomposable into \texttt{x} structured bindings (see
 \texttt{[dcl.struct.bind]}).  And as such the function template only
 participates in overloading when all the structured bindings are appropriately
-decomposable at the call site.} The invented type \texttt{template-parameter}
-is a parameter pack if the corresponding \texttt{parameter-declaration}
-declares a function parameter pack (11.3.5).  \hlgreen{A structured binding
+decomposable.} The invented type \texttt{template-parameter} is a parameter
+pack if the corresponding \texttt{parameter-declaration} declares a function
+parameter pack (11.3.5).  \hlgreen{A structured binding
 \texttt{parameter-declaration} cannot be used to invent a parameter pack.} The
 return type and function parameters of the function call operator template are
 derived from the \texttt{lambda-expression}’s \texttt{trailing-return-type}
@@ -454,7 +456,8 @@ name of the corresponding invented \texttt{template-parameter}.
 
 \hlgreen{5.  If the number of structured bindings introduced by a structured
 binding declaration is \texttt{x}, then a type \texttt{T} is called
-\texttt{x-decomposable} if the following is well formed}
+\texttt{x-decomposable} if the following is well formed in the least
+restrictive member access scope (where privates are accessible)}
 \begin{lstlisting}
 auto&& [one, two, three, ... , x] = o;
 \end{lstlisting}
@@ -469,6 +472,6 @@ struct is_decomposable;
 \end{lstlisting}
 
 \hlgreen{\textbf{Condition} The type \texttt{T} has to be
-\texttt{x-decomposable} (see \texttt{[expr.prim.lambda.closure]}p3)}
+\texttt{x-decomposable} (see \texttt{[dcl.struct.bind]}p5)}
 
 \end{document}
