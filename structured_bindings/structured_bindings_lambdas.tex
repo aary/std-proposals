@@ -125,6 +125,7 @@ semantics.
 a structured binding expression with \texttt{x} bindings, then it is said to
 be \texttt{x-decomposable} (reference \texttt{[dcl.struct.bind]} for the exact
 requirements).  More specifically, if the following expression is well formed
+in the least restrictive member access scope (where privates are accessible)
 for a type \texttt{T}
 \begin{lstlisting}
 auto&& [one, two, three, ... , x] = o;
@@ -214,9 +215,9 @@ auto lambda = [](const auto [key, value]) { ... };
  * Expansion of the above lambda
  */
 struct ANONYMOUS_LAMBDA {
-    template <std::decomposable<2> Type>
-    auto operator()(const Type instance) const {
-        auto& [key, value] = instance;
+    template <std::decomposable<2> __Type>
+    auto operator()(const __Type __instance) const {
+        auto& [key, value] = __instance;
         ...
     }
 };
@@ -232,7 +233,27 @@ corresponding initializer.  The referenced type of the bindings however, would
 remain the same in both cases; so the change in the actual reference type of
 the bindings can be considered a mere implementation detail.
 
-Given the above expansion, a polymorphic lambda behaves identically to a
+Similarly a lambda that has two seperate groups of structured binding
+declarations will translate with the decompositions happening serially within
+the function body
+
+\begin{lstlisting}
+auto lambda = [](const auto [key, value], auto&& [one, two, three]) { ... };
+
+/**
+ * Expansion of the above lambda
+ */
+struct ANONYMOUS_LAMBDA {
+    template <std::decomposable<2> __One, std::decomposable<3> __Two>
+    auto operator()(const One __one, Two&& __two) {
+        auto& [key, value] = __one;
+        auto& [one, two, three] = __two;
+        ...
+    }
+};
+\end{lstlisting}
+
+Given the above expansions, a polymorphic lambda behaves identically to a
 lambda with a \textt{auto} parameter type with the difference that these are
 constrained to work only with parameters that are \texttt{x} decomposable.
 And nothing special happens when overloading
@@ -258,6 +279,7 @@ int main() {
 }
 \end{lstlisting}
 
+\subsection{Viable orthogonal overloads}
 One key point to consider here is that the concept based constraints on such
 lambdas allows for the following two orthogonal overloads to work nicely with
 each other
@@ -283,6 +305,58 @@ Since here either one lambda can be called or both, in no case can both
 satisfy the requirements set forth by the compiler concept
 \texttt{std::decomposable<x>}
 
+\subsection{Access control and decompositions}
+Another key point to consider is acess control within the expansion of the
+lambda.  Decompositions will share the access control powers of the code in
+the surrounding scope where the lambda is defined.  So if the decomposition
+was in the body of the lambda and was valid (for example, even if the type
+being decomposed has private \texttt{get<>()} methods)  the lambda would be
+able to decompose it successfully.  For example the following code is valid
+
+\begin{lstlisting}
+class Something {
+public:
+    static auto make_decomposer();
+private:
+    std::tuple<int, int> tup{1, 2};
+    template <std::size_t Index>
+    int get();
+};
+
+namespace std {
+template <>
+class tuple_size<Something> : public std::integral_constant<std::size_t, 2> {};
+template <std::size_t Index>
+class tuple_element<Index, Something> {
+public:
+    using type = int;
+};
+} // namespace std
+
+template <std::size_t Index>
+int Something::get() {
+    return std::get<Index>(this->tup);
+}
+
+auto Something::make_decomposer() {
+    // decomposition of Something instances is allowed access to the privates
+    // of Something since it's defined in a context where private members are
+    // visible
+    return [](auto [one, two]) {
+        assert(one == 1);
+        assert(two == 2);
+    };
+}
+
+void foo() {
+    auto something = Something{};
+    auto decomposer = Something::make_decomposer();
+
+	// the decomposition here happens in the scope of the lambda so is valid
+    decomposer(something);
+}
+\end{lstlisting}
+
 
 \section{Conversions to function pointers}
 A capture-less polymorphic lambda with structured binding parameters can also
@@ -304,9 +378,9 @@ auto lambda = [](const auto [one, two]) { ... };
  * Expansion of the above lambda in C++17 form with respect to overloading
  */
 struct ANONYMOUS_LAMBDA {
-    template <std::decomposable<2> Type>
-    auto operator()(const Type instance) const {
-        auto& [one, two] = instance;
+    template <std::decomposable<2> __Type>
+    auto operator()(const __Type __instance) const {
+        auto& [one, two] = __instance;
         ...
     }
 
@@ -316,9 +390,9 @@ private:
      * elision isn't guaranteed to happen to function parameters (even in
      * return values)
      */
-    template <std::decomposable<2> Type>
-    static auto invoke(const Type instance) {
-        auto& [key, value] = instance;
+    template <std::decomposable<2> __Type>
+    static auto __invoke(const __Type __instance) {
+        auto& [key, value] = __instance;
         ...
     }
 
@@ -328,7 +402,7 @@ public:
      */
     template <typename Return, std::decomposable<2> Arg>
     operator Return(*)(Arg)() const {
-        return &invoke;
+        return &__invoke;
     }
 };
 \end{lstlisting}
@@ -338,9 +412,13 @@ function invokes an instantiation of the function with the types used in the
 conversion operator
 
 \section{Exceptions}
-Exceptions during "unwrapping" (if, for example a member or free ADL defined
-\texttt{get<>} throws) will propagate from the call site, just as with regular
-polymorphic lambdas
+Any exceptions during copy/move construction of the instance which is to be
+decomposed being will be thrown from the call site, just as with regular
+polymorphic lambdas.  However, if there is an exception thrown during the
+decomposition process, for example if \texttt{get<>()} throws, that will
+propagate from within the lambda, so if a function level try catch block was
+allowed for a lambda that would catch an exception that was generated during
+the "decomposition" process.
 
 
 \section{Acknowledgements}
