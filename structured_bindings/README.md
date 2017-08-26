@@ -8,3 +8,5 @@ std::for_each(map, [](const auto& [key, value]) {
     cout << key << " " << value << endl;
 });
 ```
+
+Read the full paper [here](https://goo.gl/i9qV3Z)
