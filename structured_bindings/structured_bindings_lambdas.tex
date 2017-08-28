@@ -228,7 +228,7 @@ the expression \texttt{e} (see \texttt{[dcl.struct.bind]p1}) is not an lvalue
 in the structured binding declaration, and when \texttt{e} is not an lvalue,
 the introduced bindings are decomposed as if \texttt{e} was an xvalue.  If
 \texttt{e} was an lvalue, (i.e.  if \texttt{\&} was used as the
-\texttt{ref-operator} or if \texttt{\&\&} was used and an lvalue was passed in
+\texttt{ref-qualifier} or if \texttt{\&\&} was used and an lvalue was passed in
 to the lambda) then the \texttt{std::move()} will be omitted (see the next
 expansion for an example where \texttt{std::move()} is omitted)
 
