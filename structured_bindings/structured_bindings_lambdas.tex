@@ -96,20 +96,20 @@ cases code usually deteriorates to manually unpacking the instance of the
 decomposable class for maximum reaadability, for example
 
 \begin{lstlisting}
-auto result = std::count_if(map, [](const auto& key_value_pair) {
-    const auto& key = key_value_pair.first;
-    const auto& value = key_value_pair.second;
+return std::when_all(one, two).then([](auto futures) {
+    auto& one = std::get<0>(futures);
+    auto& two = std::get<1>(futures);
 
-    return examine(key, process_key(key), value);
+    return one.get() * two.get() * three.get();
 });
 \end{lstlisting}
 
-The first two lines in the lambda are just noise and can nicely be replaced
+The first three lines in the lambda are just noise and can nicely be replaced
 with structured bindings in the function parameter
 
 \begin{lstlisting}
-auto result = std::count_if(map, [](const auto& [key, value]) {
-    return examine(key, process_key(key), value);
+return std::when_all(one, two).then([](auto [one, two]) {
+    return one.get() * two.get();
 });
 \end{lstlisting}
 
