@@ -142,7 +142,7 @@ void, otherwise \texttt{INVOKE(f, t1, t2, ..., tN)} implicitly converted to R
 except where \texttt{decltype(INVOKE(f, t1, t2, ..., tN))} is a type
 \texttt{A} where \texttt{!(std::is\_reference\_v<R> \&\&
 !std::is\_reference\_v<A>)} is \texttt{true}, in which case the
-\texttt{INVOKE} expression does not participate in overload resolution
+\texttt{SAFE\_INVOKE} expression does not participate in overload resolution
 
 \subsection{Section 23.14.13.2 (\texttt{[func.wrap.func]}) paragraph 2}
 A callable type (23.14.2) F is \texttt{Lvalue-Callable} for argument types
