@@ -121,9 +121,10 @@ semantics.
 
 
 \section{Interaction with concepts and traits}
-\textbf{Definition (\texttt{x-decomposable})} If a type can be decomposed into
-a structured binding expression with \texttt{x} bindings, then it is said to
-be \texttt{x-decomposable} (reference \texttt{[dcl.struct.bind]} for the exact
+\textbf{Definition (\texttt{x-decomposable})} For a given domain of types that
+are decomposable, if a type can be decomposed into a structured binding
+expression with \texttt{x} bindings, then it is said to be
+\texttt{x-decomposable} (reference \texttt{[dcl.struct.bind]} for the exact
 requirements).  More specifically, if the following expression is well formed
 in the least restrictive member access scope (where privates are accessible)
 for a type \texttt{T}
@@ -355,6 +356,87 @@ void foo() {
     decomposer(something);
 }
 \end{lstlisting}
+
+
+\section{Compatibility with ODR}
+A typical problem with traits classes comes from the ODR rule.  We have the
+same potential problem with the trait defined earlier -
+\texttt{std::is\_deomposable<>}.  A type may be defined such that it is unable
+to be decomposed at one point in a program and might be decomposable at other
+points.
+
+This problem comes from the nature of the structured bindings feature.  To
+maintain backwards compatibility with types that were defined before the
+feature, structured bindings use traits types to detect whether types are
+decomposable.  In particular one trait that is always used and needs to be
+defined for non array and non class types with only public members is
+\texttt{std::tuple\_size}.  By virtue of being a trait, it needs to be defined
+or specialized after a class's definition.  This leads to possible
+discrepencies in whether it is complete or not at different points in the
+program.  And if we instantiate the \texttt{std::is\_decomposable} trait at
+these incompatible points we risk violating ODR.
+
+There are three possible solutions to this problem
+
+\subsection{Disabled overloading based on decomposability}
+Disabling overloading based on decomposability is another solution to the
+problem of possibly violating ODR.  With this we can treat all lambdas with
+structured bindings parameters as the normal equivalent lambda with a single
+non structured binding parameter with no decomposing and the same cv-ref
+qualifications.  For example
+
+\begin{lstlisting}
+auto one = [](auto one, auto&& [two, three], auto four, const auto& [five]) {};
+\end{lstlisting}
+
+Would be equivalent to
+
+\begin{lstlisting}
+auto one = [](auto one, auto&& two, auto three, const auto& four)
+\end{lstlisting}
+
+This seems to be the simplest way forward.  As a corrolary
+\texttt{std::is\_decomposable} can still safely exist and be used in
+situations where programmers are guaranteed to get a decomposable type using
+the approach described in the next subsection
+
+\subsection{Poisoning the trait}
+One possible approach is to poison the \texttt{std::is\_decomposable} trait to
+produce ill defined code when instantiated with a type that is not
+decomposable (i.e. a non-array, non-class type with only public data members
+and a type for which the required structured bindings specializations are not
+defined).  This would work in concept something like this
+
+\begin{lstlisting}
+template <typename T, typename = void_t<>>
+class IsDecomposableImpl {
+    /**
+     * This would render the program ill formed when instantied with a non
+     * decomposable type - including but not limited to types which do not
+     * have std::tuple_size defined
+     */
+    static_assert(always_false<T>);
+};
+
+/**
+ * Then the other specializations
+ */
+template <typename T>
+class IsDecomposableImpl<T, ....> { ... };
+...
+\end{lstlisting}
+
+This would limit the overloadability of lambdas which accept structured
+bindings parameters to work only with other lambdas accepting structured
+bindings parameters.
+
+\subsection{Argument Introspection}
+Like function arguments, programers should be able to detect the number of
+bindings to the structured bindings parameters in a lambda.  So they can
+employ metaprogramming strategies.  To enable this, there can be traits that
+list the number of function arguments allowed, which ones are structured
+bindings parameters, the types and cv qualifications of each function
+parameter (template types should be treated specially)
 
 
 \section{Conversions to function pointers}
