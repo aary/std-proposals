@@ -4,11 +4,14 @@
 \usepackage{fancyhdr}
 \usepackage{titling}
 \pagestyle{fancy}
-\lhead{Top bar topic}
+\lhead{Tightening the constraints on \texttt{std::function}}
 \rhead{\thepage}
 \usepackage{color}
 \usepackage{graphicx}
 \usepackage{listings}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{csquotes}
 \lstset{
   % language=C++,
   showstringspaces=false,
@@ -23,16 +26,115 @@
 \usepackage{parskip}
 \usepackage{indentfirst}
 \setlength{\droptitle}{-4em}
+\usepackage{soul}
+\usepackage{color}
+\DeclareRobustCommand{\hlgreen}[1]{{\sethlcolor{green}\hl{#1}}}
+\newcommand*\justify{%
+  \fontdimen2\font=0.4em% interword space
+  \fontdimen3\font=0.2em% interword stretch
+  \fontdimen4\font=0.1em% interword shrink
+  \fontdimen7\font=0.1em% extra space
+  \hyphenchar\font=`\-% allowing hyphenation
+}
 % \usepackage{concmath}
 % \usepackage[T1]{fontenc}
-\pagenumbering{gobble}
 % ********************************* HEADERS ***********************************
 
 \begin{document}
-\title{\textbf{Topic}}
-\author{Aaryaman Sagar (rmn100@gmail.com)}
-\date{}
+\title{\textbf{Tightening the constraints on \texttt{std::function}}}
+\author{Aaryaman Sagar (aary@instagram.com)}
+\date{February 7, 2018}
 \maketitle
 
-\end{document}
+\section{Introduction}
 
+\begin{lstlisting}
+#include <iostream>
+#include <functional>
+
+const int& foo(std::function<const int&()> bar) {
+    return bar();
+}
+
+int main() {
+    std::cout << foo([] { return 1; }) << std::endl;
+}
+\end{lstlisting}
+
+The above code should not compile, however with the current restraints on
+\texttt{std::function} it does, and exhibits undefined behavior.
+
+\section{The current rules}
+The offending part of the current standard comes first from section
+\texttt{[func.wrap.func]p2}
+\begin{displayquote}
+A callable type (23.14.2) F is Lvalue-Callable for argument types ArgTypes and
+return type R if the expression \texttt{INVOKE<R>(declval<F&>(),
+declval<ArgTypes>()...)}, considered as an unevaluated operand (Clause 8), is
+well formed (23.14.3).
+\end{displayquote}
+
+And then the corresponding definition of \texttt{INVOKE<R>} in section
+\texttt{[func.require]p2}
+\begin{displayquote}
+Define \texttt{INVOKE<R>(f, t1, t2, ..., tN)} as
+\texttt{static\_cast<void>(INVOKE(f, t1, t2, ..., tN))} if R is cv void,
+otherwise \texttt{INVOKE(f, t1, t2, ..., tN)} implicitly converted to R.
+\end{displayquote}
+
+The problem here is that an invocable with return type \texttt{R} and
+compatible arguments is convertible to a function object of type
+\texttt{std::function<Return(Args...)>} either via construction, assignment
+and combination of thereof if given that \texttt{R} is implicitly convertible to
+\texttt{Return}.  This requirement needs to be tightened to accomodate for the
+common case of implicit conversion from prvalue to a reference type
+
+\section{Prevalence}
+Dangling references are a common problem in C++ and have caused severe
+problems in critical codebases in the past.  In particular this bug has come
+up in Facebook's codebase in the past and has caused SEVs.  The issue of
+returned dangling references has since been patched in our code -
+we protect against this by detecting the binding of references to prvalue
+expressions.  The code for this can be found
+\href{https://goo.gl/iyjDA9}{here} and \href{https://goo.gl/GAvi5j}{here}.
+
+A prvalue to reference binding in a function's return type should never be
+allowed at runtime.  And is even prohibited by the current C++17 standard
+\texttt{[class.temporary]p6.10}
+\begin{displayquote}
+The lifetime of a temporary bound to the returned value in a function return
+statement (9.6.3) is not extended; the temporary is destroyed at the end of
+the full-expression in the return statement.
+\end{displayquote}
+
+This invalidates conversions from rvalues to references in the return
+statement of a function.  And in practice, compilers like
+\href{fucntio://wandbox.org/permlink/vRKLn2OoolPzeW44}{gcc 7.2.0} and
+\href{https://wandbox.org/permlink/lOCOoY0qnSJwIQ8j}{clang 5.0.0} warn against
+this.
+
+\section{Backwards Compatibility}
+This will be a breaking change to the standard.  Previous code that might
+compile will no longer compile.  In practice this is a good limitation to
+impose.  There is no code that will run without undefined behavior if this
+problem manifests at runtime
+
+\section{Changes to the current C++17 standard}
+\subsection{Section 23.14.3 (\texttt{[func.require]}) paragraph 2}
+Define \texttt{INVOKE<R>(f, t1, t2, ..., tN)} as
+\texttt{static\_cast<void>(INVOKE(f, t1, t2, ..., tN))} if R is cv void,
+otherwise \texttt{INVOKE(f, t1, t2, ..., tN)} implicitly converted to R.
+Define \texttt{SAFE\_INVOKE<R>(f, t1, t2, ..., tN)} as the expression
+\texttt{\justify static\_cast<void>(INVOKE(f, t1, t2, ..., tN))} if R is cv
+void, otherwise \texttt{INVOKE(f, t1, t2, ..., tN)} implicitly converted to R
+except where \texttt{decltype(INVOKE(f, t1, t2, ..., tN))} is a type
+\texttt{A} where \texttt{!(std::is\_reference\_v<R> &&
+!std::is\_reference\_v<A>)} is \texttt{true}
+
+\subsection{Section 23.14.13.2 (\texttt{[func.wrap.func]}) paragraph 2}
+A callable type (23.14.2) F is \texttt{Lvalue-Callable} for argument types
+\texttt{ArgTypes} and return type \texttt{R} if the expression
+\texttt{SAFE\_INVOKE<R>(declval<F&>(), declval<ArgTypes>()...)}, considered as
+an unevaluated operand (Clause 8), is well formed (23.14.3).
+
+\end{document}
