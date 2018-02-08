@@ -93,9 +93,9 @@ common case of implicit conversion from prvalue to a reference type
 Dangling references are a common problem in C++ and have caused severe
 problems in critical codebases in the past.  In particular this bug has come
 up in Facebook's codebase in the past and has caused SEVs.  The issue of
-returned dangling references has since been patched in our code -
-we protect against this by detecting the binding of references to prvalue
-expressions.  The code for this can be found
+returned dangling references has since been patched in the offending spots in
+our code - we protect against this by detecting the binding of references to
+prvalue expressions.  The code for this can be found
 \href{https://goo.gl/iyjDA9}{here} and \href{https://goo.gl/GAvi5j}{here}.
 
 A prvalue to reference binding in a function's return type should never be
