@@ -119,6 +119,15 @@ compile will no longer compile.  In practice this is a good limitation to
 impose.  There is no code that will run without undefined behavior if this
 problem manifests at runtime
 
+\subsection{Backwards compatible fix}
+To illustrate that this problem is immediately fixable, we can fix this
+without impacting backwards compatibility.
+
+The problem is detectable at compile time.  So an option is to throw an
+exception when \texttt{std::function} is invoked from an unsafe wrapped
+callable.  This would manifest as an \texttt{std::logic\_error} or a call to
+\texttt{std::abort}
+
 \section{Changes to the current C++17 standard}
 \subsection{Section 23.14.3 (\texttt{[func.require]}) paragraph 2}
 Define \texttt{INVOKE<R>(f, t1, t2, ..., tN)} as
