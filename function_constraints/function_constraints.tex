@@ -140,7 +140,7 @@ otherwise \texttt{INVOKE(f, t1, t2, ..., tN)} implicitly converted to R.
 expression \texttt{\justify static\_cast<void>(INVOKE(f, t1, t2, ...,
 tN))} if R is cv void, otherwise \texttt{INVOKE(f, t1, t2, ..., tN)}
 implicitly converted to R except where \texttt{decltype(INVOKE(f, t1, t2,
-..., tN))} is a type \texttt{A} where \texttt{!(std::is\_reference\_v<R> \&\&
+..., tN))} is a type \texttt{A} where \texttt{(std::is\_reference\_v<R> \&\&
 !std::is\_reference\_v<A>)} is \texttt{true}, in which case the
 \texttt{SAFE\_INVOKE} expression does not participate in overload resolution}
 
