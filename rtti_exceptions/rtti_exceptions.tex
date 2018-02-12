@@ -1,0 +1,319 @@
+% ********************************* HEADERS ***********************************
+\documentclass{article}
+\usepackage[top=.75in, bottom=.75in, left=.50in,right=.50in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{titling}
+\pagestyle{fancy}
+\lhead{RTTI introspection with \texttt{std::exception\_ptr}}
+\rhead{\thepage}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{csquotes}
+\lstset{
+  % language=C++,
+  showstringspaces=false,
+  basicstyle={\small\ttfamily},
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{dkgreen},
+}
+\usepackage[colorlinks,urlcolor={blue}]{hyperref}
+%\setlength{\parskip}{1em}
+\usepackage{parskip}
+\usepackage{indentfirst}
+\setlength{\droptitle}{-4em}
+\usepackage{soul}
+\usepackage{color}
+\DeclareRobustCommand{\hlgreen}[1]{{\sethlcolor{green}\hl{#1}}}
+\newcommand*\justify{%
+  \fontdimen2\font=0.4em% interword space
+  \fontdimen3\font=0.2em% interword stretch
+  \fontdimen4\font=0.1em% interword shrink
+  \fontdimen7\font=0.1em% extra space
+  \hyphenchar\font=`\-% allowing hyphenation
+}
+% \usepackage{concmath}
+% \usepackage[T1]{fontenc}
+% ********************************* HEADERS ***********************************
+
+\begin{document}
+\title{\textbf{Runtime type introspection with \texttt{std::exception\_ptr}}}
+\author{Aaryaman Sagar (aary@instagram.com)}
+\date{February 7, 2018}
+\maketitle
+
+\section{Introduction}
+Exceptions manifest themselves in non-linear asynchronous programming via the
+\texttt{std::exception\_ptr} handle.  Asynchronous and non-linear programming
+models, however tend to not mix well with exceptions because of the limited
+capabilities of \texttt{std::exception\_ptr}.  This paper proposes adding RTTI
+features to \texttt{std::exception\_ptr}, which will facilitate error
+introspection giving users more control of exceptions without having to go
+through the overhead of stack unwinding.
+
+\section{Prevalence}
+Current interfaces that aim to generalize asynchronous I/O hook into
+\texttt{std::exception\_ptr} as a point of error propagation.  This is true
+for example with the current \texttt{std::future} interface.  Further with
+asychronous continuations this feature is going to be more widely used and
+implemented.
+\begin{lstlisting}
+asynchronous_io().then([](std::future<Value> future) {
+    try {
+        cout << "Value " << future.get() << endl;
+    } catch (std::runtime_error& err) {
+        cerr << err.what() << endl;
+    }
+});
+\end{lstlisting}
+This interface wherein the exception is hidden behind the discriminated
+asynchronous monad is convenient but quickly degrades to bad performance
+because of the repeated stack unwinding, this is especially true when
+exceptions propagate through several layers of chained callbacks.  Even
+outside user code, implemnetations themselves might have to put a \texttt{try}
+\texttt{catch} block around the callbacks just for this purpose.
+
+When a core implementation has such drawbacks people will look to either using
+some custom form of error propagation or will come up with their own
+interfaces and deem exceptions underperformant.  We should solve this problem
+for them and provide a well performing primitive that is already built into
+the language.  As an example Facebook's folly futures, implement
+\texttt{onError} callbacks and their own \texttt{folly::exception\_wrapper} to
+avoid some pathological inefficiencies with exceptions and
+\texttt{std::exception\_ptr}
+\begin{lstlisting}
+asychronous_io().then([](Value value) {
+    cout << "Value " value << endl;
+}).onError(std::runtime_error& err) {
+    cerr << "Value " value << endl;
+});
+\end{lstlisting}
+
+\section{Current \texttt{std::exception\_ptr} implementations}
+Current \texttt{std::exception\_ptr} implementations contain mechanisms to
+fetch \texttt{std::type\_info} object that corresponds to the type of the
+exception being pointed to.  This can be found in the \texttt{libstdc++}
+implementation \href{https://goo.gl/u4oYcv}{here}
+\begin{lstlisting}
+const std::type_info* __cxa_exception_type() const;
+\end{lstlisting}
+
+[TODO - section about relevant portions of the itanium ABI]
+
+\section{Proposed \texttt{std::exception\_ptr} interface}
+C++17 also provided a convenient utility to generalize discriminated monadic
+storage - \texttt{std::any}.  Both the implementations of
+\texttt{std::exception\_ptr} and \texttt{std::any} allow fetching
+\texttt{std::type\_info} objects for the underlying object or exception.
+Further there is another discriminated type \texttt{std::variant} that stores
+one of many types.  While these interfaces solve similar problems, they have
+drastically different interfaces.  This paper will go into depth about how to
+unify these interfaces and allow \texttt{std::exception\_ptr} to become a well
+performing first choice primitive
+
+\texttt{std::any} provides access to an instance of any type, this is hidden
+behind a type erased interface.  This closely resembles what exceptions do,
+the type of the exception is hidden behind the function until the information
+is made available as a part of the stack unwinding process.
+\texttt{std::exception\_ptr} should provide a method to allow fetching of the
+discriminated instance
+\begin{lstlisting}
+class exception_ptr {
+public:
+    // ...
+
+    /**
+     * Return an std::any object that contains a copy of the underlying stored
+     * exception
+     */
+    std::any any() const;
+};
+\end{lstlisting}
+
+This is simple and becomes a point of reusability for two separate interfaces
+that solve similar problems
+
+\subsection{Dealing with data races}
+The current standard goes into depth about how to prevent data races when
+accessing the same exception object through an \texttt{std::exception\_ptr}
+instance.  This is why the \texttt{any()} function on
+\texttt{std::exception\_ptr} should return a copy of the underlying exception
+object.  Making it safe for threads to concurrently access the same
+\texttt{exception\_ptr} instance.  (Provided that copy constructor
+implementations for the given objects don't introduce a race themsleves)
+
+\subsection{Dealing with recursive exception propagation}
+The interaface must not return properly when an exception propagates while
+copying the underlying exception instance to prevent infinite exception
+recursion.  So if a call to \texttt{std::exception\_ptr::any()} causes an
+exception to be thrown from the underlying exception object, the
+implementation might throw a \texttt{std::bad\_exception} object possibly
+causing abnormal program termination via \texttt{std::terminate}
+
+\section{Efficient representation}
+As the current proposal has been outlined a typical \texttt{std::exception\_ptr}
+class is logically equivalent to a reference counted shared pointer to type
+erased discriminated storage - \texttt{std::shared\_ptr<std::any>}.  However
+this is just a logical representation.  Implementations are free to strip away
+any unnnecesary indirections to make serialization to and from
+\texttt{std::exception\_ptr} via \texttt{std::make\_exception\_ptr} and other
+\texttt{std::exception\_ptr} instances performant.
+
+Allowing \texttt{std::exception\_ptr} instances to be aware of each other's
+internals also provides the bonus that we can now translate uniformly between
+different \texttt{std::exception\_ptr} instances without having to go through
+the overhead of stack unwinding for RTTI extraction.  This also means that we
+can now limit \texttt{std::exception\_ptr} creation to a single dynamic
+storage allocation
+
+\section{Extracting the underlying exception}
+It natually follows that we need an efficient method of extracting the
+underlying exception from an \texttt{exception\_ptr}
+\begin{lstlisting}
+auto exception = exception_ptr.extract<std::runtime_error>();
+\end{lstlisting}
+
+This is implemented as if by
+\begin{lstlisting}
+template <typename Exc>
+std::remove_cvref_t<Exc> exception_ptr::extract() {
+    try {
+        std::rethrow_exception(*this);
+    } catch(Exc& err) {
+        return err;
+    } catch(...) {
+        std::rethrow_exception(*this);
+    }
+}
+\end{lstlisting}
+
+Where the underlying exception is copied and returned (possibly more than
+once).  The rules listed in \texttt{[except.handle]} apply.  If an exception
+was already propagating and an incompatible exception type template was passed
+to the \texttt{extract} method, as if to trigger the default catch clause
+\texttt{std::terminate()} is called
+
+\texttt{std::exception\_ptr} would now look like this
+\begin{lstlisting}
+class exception_ptr {
+public:
+    // ...
+
+    /**
+     * Return an std::any object that contains a copy of the underlying stored
+     * exception
+     */
+    std::any any() const;
+
+    /**
+     * Extracts a copy of the underlying stored exception, if an incompatible
+     * type is passed, std::rethrow_exception(*this) is called
+     */
+    template <typename Exc>
+    Exc extract();
+};
+\end{lstlisting}
+
+\section{Visitation with \texttt{std::exception\_ptr}}
+Given that we have a mechanism to extract runtime type information from an
+\texttt{exception\_ptr} we should have an efficient mechanism to handle errors
+without going through the overhead of stack unwinding with the same conditions
+as with regular exception handling
+\begin{lstlisting}
+exception_ptr.handle(
+    [&](std::runtime_error& exc) {
+        cerr << exc.what() << endl;
+    },
+    [&](std::logic_error& exc) {
+        cerr << exc.what() << endl;
+    },
+    [&](std::exception& exc) {
+        cerr << exc.what() << endl;
+    },
+    [&](...) {
+        std::terminate();
+    });
+\end{lstlisting}
+
+This would need to follow the same rules as exception catching via catch
+clauses.  The rules listed in \texttt{[except.handle]} apply.  Here \texttt{E}
+is the type of the exception stored in the \texttt{exception\_ptr} either via
+\texttt{std::make\_exception\_ptr} or via a call to
+\texttt{std::current\_exception()} in the presence of exception propagation
+where E is \texttt{std::remove\_cvref\_t<CE>}, \texttt{CE} being the cv-ref
+qualified type of the exception in the current catch clause, or the type of
+the object initially thrown.
+
+The handle clauses must be unary functions that accept a type \texttt{E} and
+return void.  Polymorphic lambdas, functors with templated \texttt{operator()}
+methods or invocables accepting more than one argument (either templated or
+not) do not qualify as valid arguments and the resulting program is ill formed
+if those are passed.
+
+\texttt{std::exception\_ptr} would now look like this
+\begin{lstlisting}
+class exception_ptr {
+public:
+    // ...
+
+    /**
+     * Return an std::any object that contains a copy of the underlying stored
+     * exception
+     */
+    std::any any() const;
+
+    /**
+     * Extracts a copy of the underlying stored exception, if an incompatible
+     * type is passed, std::rethrow_exception(*this) is called
+     */
+    template <typename Exc>
+    Exc extract();
+
+    /**
+     * Handles the exception as if by the same rules as normal exception
+     * handling
+     *
+     * The HandleClauses clauses must be unary functions that accept one
+     * cv-ref qualified argument and return void
+     *
+     * In the case where none of the handle clauses match, the exception is
+     * rethrown as if via std::rethrow_exception(*this)
+     *
+     * A terminal closure or function that accepts elipses may be passed to
+     * override the default behavior of rethrowing the exception
+     */
+    template <typename... HandleClauses>
+    void handle(HandleClauses&&... handle_clauses);
+};
+\end{lstlisting}
+
+\subsection{Sample Implementation}
+Given the \texttt{std::exception\_ptr::extract} method,
+\texttt{std::exception\_ptr::handle} can be implemented as so
+\begin{lstlisting}
+template <typename Head, typename... Tail>
+void handle(HeadClause& head, Tail&&... handle_clauses) {
+    // Failure case if applicable
+    if constexpr (is_elipses_arg_type<Head>) {
+        static_assert(sizeof...(Tail) == 0);
+        head();
+    }
+
+    // handle exceptions
+    try {
+        head(this->extract<extract_arg_type_t<Head>>(*this));
+    } catch (...) {
+        this->handle(std::forward<Tail>(tail)...);
+    }
+}
+\end{lstlisting}
+
+Of course implementations are highly encouraged not to cause repeated stack
+unwinding, as the premise of providing such introspection was to avoid
+repeated stack unwinding while still allowing introspection
+
+\end{document}
