@@ -104,7 +104,7 @@ const std::type_info* __cxa_exception_type() const;
 
 [TODO - section about relevant portions of the itanium ABI]
 
-\section{Proposed \texttt{std::exception\_ptr} interface}
+\section{Interoperability with \texttt{std::any}}
 C++17 also provided a convenient utility to generalize discriminated monadic
 storage - \texttt{std::any}.  Both the implementations of
 \texttt{std::exception\_ptr} and \texttt{std::any} allow fetching
@@ -136,15 +136,6 @@ public:
 
 This is simple and becomes a point of reusability for two separate interfaces
 that solve similar problems
-
-\subsection{Dealing with data races}
-The current standard goes into depth about how to prevent data races when
-accessing the same exception object through an \texttt{std::exception\_ptr}
-instance.  This is why the \texttt{any()} function on
-\texttt{std::exception\_ptr} should return a copy of the underlying exception
-object.  Making it safe for threads to concurrently access the same
-\texttt{exception\_ptr} instance.  (Provided that copy constructor
-implementations for the given objects don't introduce a race themsleves)
 
 \subsection{Dealing with recursive exception propagation}
 The interaface must not return properly when an exception propagates while
@@ -315,5 +306,15 @@ Of course implementations are highly encouraged not to cause repeated stack
 unwinding, as the premise of providing such introspection was to avoid
 repeated stack unwinding while still allowing multiplexing many different
 error types with the same exception
+
+\section{Dealing with data races}
+The current standard goes into depth about how to prevent data races when
+accessing the same exception object through an \texttt{std::exception\_ptr}
+instance.  This is why \texttt{std::exception\_ptr::any()}
+\texttt{std::exception\_ptr::extract} and \texttt{std::exception\_ptr::handle}
+should return copies of the underlying exception to user code.  Making it safe
+for threads to concurrently access the same \texttt{exception\_ptr} instance.
+(Provided that copy constructor implementations for the given objects don't
+introduce a race themsleves)
 
 \end{document}
