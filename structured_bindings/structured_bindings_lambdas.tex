@@ -100,11 +100,11 @@ return std::when_all(one, two).then([](auto futures) {
     auto& one = std::get<0>(futures);
     auto& two = std::get<1>(futures);
 
-    return one.get() * two.get() * three.get();
+    return one.get() * two.get();
 });
 \end{lstlisting}
 
-The first three lines in the lambda are just noise and can nicely be replaced
+The first two lines in the lambda are just noise and can nicely be replaced
 with structured bindings in the function parameter
 
 \begin{lstlisting}
@@ -153,24 +153,24 @@ when these are not present (see \texttt{[dcl.struct.bind]}p4)
 decomposability that can be checked by the programmer at compile time
 (described above) via a concept or trait.  However
 \texttt{[dcl.struct.bind]}p4 describes a method of unpacking that cannot be
-enforced purely by the language constructs available as of C++17.  As such a
-compiler intrinsic, say \texttt{\_\_is\_decomposable<T, x>} is required.
-Given such an intrinsic, defining a trait and concept that check if a type is
-\texttt{x-decomposable} on top of that is trivial.  The trait itself can be
-used as a backend for the concept, leaving the implementation of the concept
-entirely in portable code without the help of compiler intrinsics.
+enforced purely by the language constructs available as of C++17.  As such
+something like a compiler intrinsic, say \texttt{\_\_is\_decomposable<T, x>}
+is required.  Given support from a compiler with such an intrinsic, defining a
+trait and concept that check if a type is \texttt{x-decomposable} on top of
+that is trivial.  The trait itself can be used as a backend for the concept,
+leaving the implementation of the concept entirely in portable code without
+the help of compiler intrinsics.
 
-The concept, say \texttt{std::decomposable<x>} accepts a non type template
+The concept, say \texttt{std::decomposable<x>} accepts a non-type template
 parameter of type \texttt{std::size\_t} that determines the cardinality of the
 structured bindings decomposition.  This concept holds if a type is
 \texttt{x-decomposable} (and this will take into consideration the
 requirements set forth by \texttt{[dcl.struct.bind]} paragraphs 2, 3 and 4.
 
-The corresponding trait, say \texttt{std::is\_decomposable<T, x>} has value
-\texttt{true} if and only if type \texttt{T} is \texttt{x-decomposable}.  The
-usual variable template \texttt{std::is\_decomposable\_v<T, x>} should also be
-defined.
-
+The corresponding trait, say \texttt{std::is\_decomposable<T, x>} inherits
+from \texttt{std::integral\_constant<bool, true>} if and only if type
+\texttt{T} is \texttt{x-decomposable}.  The usual variable template
+\texttt{std::is\_decomposable\_v<T, x>} should also be defined.
 
 \section{Impact on overloading and function resolution}
 Lambdas do not natively support function overloading, however one can lay out
@@ -179,7 +179,8 @@ following definition of \texttt{make\_overload()} for the rest of the paper
 
 \begin{lstlisting}
 template <typename... Types>
-struct Overload : public Types... {
+class Overload : public Types... {
+public:
     template <typename... T>
     Overload(T&&... types) : Types{std::forward<T>(types)}... {}
 
@@ -215,7 +216,8 @@ auto lambda = [](const auto [key, value]) { ... };
 /**
  * Expansion of the above lambda
  */
-struct ANONYMOUS_LAMBDA {
+class ANONYMOUS_LAMBDA {
+public:
     template <std::decomposable<2> __Type>
     auto operator()(const __Type __instance) const {
         auto&& [key, value] = std::move(__instance);
@@ -243,7 +245,8 @@ auto lambda = [](const auto [key, value], auto& [one, two, three]) { ... };
 /**
  * Expansion of the above lambda
  */
-struct ANONYMOUS_LAMBDA {
+class ANONYMOUS_LAMBDA {
+public:
     template <std::decomposable<2> __One, std::decomposable<3> __Two>
     auto operator()(const One __one, Two& __two) {
         auto&& [key, value] = std::move(__one);
@@ -458,7 +461,8 @@ auto lambda = [](const auto [one, two]) { ... };
 /**
  * Expansion of the above lambda in C++17 form with respect to overloading
  */
-struct ANONYMOUS_LAMBDA {
+class ANONYMOUS_LAMBDA {
+public:
     template <std::decomposable<2> __Type>
     auto operator()(const __Type __instance) const {
         auto&& [one, two] = std::move(__instance);
@@ -491,6 +495,11 @@ public:
 And like regular polymorphic lambdas, returning the address of the static
 function invokes an instantiation of the function with the types used in the
 conversion operator
+
+If in order to avoid ODR all together, the concept is avoided, then the
+concept should be avoided in the conversion operators to function pointers as
+well.  In which case the conversion operators would be the same just without
+the concept constraint.
 
 \section{Exceptions}
 Any exceptions during copy/move construction of the instance which is to be
@@ -550,7 +559,7 @@ auto&& [one, two, three, ... , x] = o;
 
 \begin{lstlisting}
 template <typename T, std::size_t X>
-struct is_decomposable;
+class is_decomposable;
 \end{lstlisting}
 
 \hlgreen{\textbf{Condition} The type \texttt{T} has to be
