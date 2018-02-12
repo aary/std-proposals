@@ -4,7 +4,7 @@
 \usepackage{fancyhdr}
 \usepackage{titling}
 \pagestyle{fancy}
-\lhead{RTTI introspection with \texttt{std::exception\_ptr}}
+\lhead{Runtime type introspection with \texttt{std::exception\_ptr}}
 \rhead{\thepage}
 \usepackage{color}
 \usepackage{graphicx}
@@ -270,8 +270,8 @@ public:
      * Extracts a copy of the underlying stored exception, if an incompatible
      * type is passed, std::rethrow_exception(*this) is called
      */
-    template <typename Exc>
-    Exc extract();
+    template <typename Exception>
+    Exception extract();
 
     /**
      * Handles the exception as if by the same rules as normal exception
@@ -291,9 +291,8 @@ public:
 };
 \end{lstlisting}
 
-\subsection{Sample Implementation}
 Given the \texttt{std::exception\_ptr::extract} method,
-\texttt{std::exception\_ptr::handle} can be implemented as so
+\texttt{std::exception\_ptr::handle} performs as if implemented as so
 \begin{lstlisting}
 template <typename Head, typename... Tail>
 void handle(HeadClause& head, Tail&&... handle_clauses) {
@@ -314,6 +313,7 @@ void handle(HeadClause& head, Tail&&... handle_clauses) {
 
 Of course implementations are highly encouraged not to cause repeated stack
 unwinding, as the premise of providing such introspection was to avoid
-repeated stack unwinding while still allowing introspection
+repeated stack unwinding while still allowing multiplexing many different
+error types with the same exception
 
 \end{document}
