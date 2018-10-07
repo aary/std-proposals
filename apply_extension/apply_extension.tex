@@ -1,0 +1,135 @@
+% ********************************* HEADERS ***********************************
+\documentclass{article}
+\usepackage[top=.75in, bottom=.75in, left=.50in,right=.50in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{titling}
+\pagestyle{fancy}
+\lhead{Remove return type deduction in std::apply}
+\rhead{\thepage}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{listings}
+\lstset{escapechar={|}}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{csquotes}
+\lstset{
+  % language=C++,
+  showstringspaces=false,
+  basicstyle={\small\ttfamily},
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{dkgreen},
+}
+\usepackage[colorlinks,urlcolor={blue}]{hyperref}
+%\setlength{\parskip}{1em}
+\usepackage{parskip}
+\usepackage{indentfirst}
+\setlength{\droptitle}{-4em}
+\usepackage{soul}
+\usepackage{color}
+\DeclareRobustCommand{\hlgreen}[1]{{\sethlcolor{green}\hl{#1}}}
+\newcommand*\justify{%
+  \fontdimen2\font=0.4em% interword space
+  \fontdimen3\font=0.2em% interword stretch
+  \fontdimen4\font=0.1em% interword shrink
+  \fontdimen7\font=0.1em% extra space
+  \hyphenchar\font=`\-% allowing hyphenation
+}
+% \usepackage{concmath}
+% \usepackage[T1]{fontenc}
+% ********************************* HEADERS ***********************************
+
+\begin{document}
+\title{\textbf{Remove return type deduction in \texttt{std::apply}}}
+\author{Aaryaman Sagar (aary@instagram.com)}
+\date{October 7, 2018}
+\maketitle
+
+\section{Introduction}
+
+\begin{lstlisting}
+#include <tuple>
+#include <iostream>
+
+template <typename VoidT, typename Func, typename... Args>
+struct well_formed : std::false_type {};
+
+template <typename Func, typename... Args>
+struct well_formed<
+    std::void_t<decltype(
+        std::apply(std::declval<Func>(), std::declval<Args>()...))>,
+    Func,
+    Args...> : std::true_type {};
+
+void foo(bool) {}
+
+int main() {
+  auto func = []() {};
+  auto args = std::make_tuple(1);
+
+  std::ignore = well_formed<void, decltype(func)&, decltype(args)&>{};
+}
+\end{lstlisting}
+
+The code above should be well formed.  However, since \texttt{std::apply} uses
+return type deduction to deduce the return type, we get a hard error as the
+substitution is outside the immediate context of the template instantiation.
+
+This paper proposes a new public trait instead of \texttt{decltype(auto)} in
+the return type of of \texttt{std::apply}
+
+\section{Impact on the standard}
+This proposal is a pure library extension.
+
+\section{\texttt{std::apply\_result}}
+\texttt{std::apply\_result} and the corresponding alias
+\texttt{std::apply\_result\_t} is the proposed trait that should be used in
+the return type of \texttt{std::apply}.  With the new declaration being
+
+\begin{lstlisting}
+template <class F, class Tuple>
+constexpr std::apply_result_t<F, Tuple> apply(F&& f, Tuple&& t);
+\end{lstlisting}
+
+\section{Implementation}
+\texttt{std::apply\_result} can be defined using the existing
+\texttt{std::invoke\_result} trait to avoid duplication in implementation
+
+\begin{lstlisting}
+// apply_impl is for exposition only
+template <class F, class T, std::size_t... I>
+constexpr auto apply_impl(F&& f, T&& t, std::index_sequence<I...>) noexcept(
+    is_nothrow_invocable<F&&, decltype(std::get<I>(std::declval<T>()))...>::
+        value)
+    -> invoke_result_t<F&&, decltype(std::get<I>(std::declval<T>()))...> {
+  return invoke(std::forward<F>(f), std::get<I>(std::forward<T>(t))...);
+}
+
+template <typename F, typename Tuple>
+using apply_result_t = decltype(apply_impl(
+    std::declval<F>(),
+    std::declval<Tuple>(),
+    std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{}));
+
+template <typename F, typename Tuple, typename = std::void_t<>>
+class apply_result {};
+template <typename F, typename Tuple>
+class apply_result<F, Tuple, std::void_t<std::apply_result_t<F, Tuple>>> {
+  using type = std::apply_result_t<F, Tuple>;
+};
+\end{lstlisting}
+
+\section{Changes to the standard}
+\subsection{Section 23.5.2 (\texttt{[[tuple.syn]]}) paragraph 1}
+\begin{lstlisting}
+    // 23.5.3.5, calling a function with a tuple of arguments
+    template <class F, class Tuple>
+    constexpr |\color{red}std::apply\_result\_t<F, Tuple>| apply(F&& f, Tuple&& t);
+
+    |\color{red}template <class F, class Tuple> class apply\_result;|
+    |\color{red}template <class F, class Tuple>|
+      |\color{red}using apply\_result\_t = typename apply\_result<F, Tuple>::type;|
+\end{lstlisting}
+\end{document}
