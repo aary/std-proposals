@@ -36,6 +36,15 @@
   \fontdimen7\font=0.1em% extra space
   \hyphenchar\font=`\-% allowing hyphenation
 }
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\lstdefinestyle{base}{
+  basicstyle={\color{darkgreen}\small\ttfamily},
+  showstringspaces=false,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{dkgreen},
+}
 % \usepackage{concmath}
 % \usepackage[T1]{fontenc}
 % ********************************* HEADERS ***********************************
@@ -136,19 +145,9 @@ virtual dispatch mechanism within \texttt{std::function} implementations
 Define \texttt{INVOKE<R>(f, t1, t2, ..., tN)} as
 \texttt{static\_cast<void>(INVOKE(f, t1, t2, ..., tN))} if R is cv void,
 otherwise \texttt{INVOKE(f, t1, t2, ..., tN)} implicitly converted to R.
-\textcolor{red}{Define \texttt{SAFE\_INVOKE<R>(f, t1, t2, ..., tN)} as the
-expression \texttt{\justify static\_cast<void>(INVOKE(f, t1, t2, ...,
-tN))} if R is cv void, otherwise \texttt{INVOKE(f, t1, t2, ..., tN)}
-implicitly converted to R except where \texttt{decltype(INVOKE(f, t1, t2,
-..., tN))} is a type \texttt{A} where \texttt{(std::is\_reference\_v<R> \&\&
-!std::is\_reference\_v<A>)} is \texttt{true}, in which case the
-\texttt{SAFE\_INVOKE} expression does not participate in overload resolution}
-
-\subsection{Section 23.14.13.2 (\texttt{[func.wrap.func]}) paragraph 2}
-A callable type (23.14.2) F is \texttt{Lvalue-Callable} for argument types
-\texttt{ArgTypes} and return type \texttt{R} if the expression
-\textcolor{red}{\texttt{SAFE\_INVOKE<R>(declval<F&>(),
-declval<ArgTypes>()...)}}, considered as an unevaluated operand (Clause 8), is
-well formed (23.14.3).
-
+\textcolor{darkgreen}{For exposition-only, define \texttt{A} as the type
+\texttt{decltype(INVOKE(f, t1, t2, ..., tN))}; if
+\texttt{std::is\_reference\_v<R> && !std::is\_reference\_v<A>} is true, then
+\texttt{INVOKE} does not participate in overload resolution (as the resulting
+expression would exhibit undefined behavior)}
 \end{document}
