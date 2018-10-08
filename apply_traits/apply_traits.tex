@@ -1,0 +1,289 @@
+% ********************************* HEADERS ***********************************
+\documentclass{article}
+\usepackage[top=.75in, bottom=.75in, left=.50in,right=.50in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{titling}
+\pagestyle{fancy}
+\lhead{Tuple application traits}
+\rhead{\thepage}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{listings}
+\lstset{escapechar={|}}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{csquotes}
+\lstset{
+  % language=C++,
+  showstringspaces=false,
+  basicstyle={\small\ttfamily},
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{dkgreen},
+}
+\usepackage[colorlinks,urlcolor={blue}]{hyperref}
+%\setlength{\parskip}{1em}
+\usepackage{parskip}
+\usepackage{indentfirst}
+\setlength{\droptitle}{-4em}
+\usepackage{soul}
+\usepackage{color}
+\DeclareRobustCommand{\hlgreen}[1]{{\sethlcolor{green}\hl{#1}}}
+\newcommand*\justify{%
+  \fontdimen2\font=0.4em% interword space
+  \fontdimen3\font=0.2em% interword stretch
+  \fontdimen4\font=0.1em% interword shrink
+  \fontdimen7\font=0.1em% extra space
+  \hyphenchar\font=`\-% allowing hyphenation
+}
+\usepackage{xcolor}
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\lstdefinestyle{base}{
+  basicstyle={\color{darkgreen}\small\ttfamily},
+  showstringspaces=false,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{dkgreen},
+}
+% \usepackage{concmath}
+% \usepackage[T1]{fontenc}
+% ********************************* HEADERS ***********************************
+
+\begin{document}
+\title{\textbf{Tuple application traits}}
+\author{Aaryaman Sagar (aary@instagram.com)}
+\date{October 8, 2018}
+\maketitle
+
+\section{Introduction}
+
+The previous paper (p1234) proposes removal of return type deduction with
+\texttt{std::apply} and adds in an explicit trait \texttt{std::apply\_result}
+to serve as the return type.  Making \texttt{std::apply} a suitable candidate
+for conditionally evaluated expressions that leverage SFINAE.
+
+This paper introduces traits to complement \texttt{std::apply\_result} that
+tend to come in handy.  These are now consistent with \texttt{std::invoke}
+traits.
+
+\section{Impact on the standard}
+This proposal is a pure library extension.
+
+\section{\texttt{std::is\_applicable}}
+\texttt{std::is\_applicable} (and the corresponding template variable
+\texttt{std::is\_applicable\_v}) is a unary type trait that inherits from
+\texttt{std::true\_type} if the passed tuple type can be expanded into an
+invocation of the passed function type, each with the same value
+categorizations.
+
+\subsection{Implementation}
+\begin{lstlisting}
+template <typename F, typename Tuple, typename = std::void_t<>>
+struct is_applicable : std::false_type {};
+template <typename F, typename Tuple>
+struct is_applicable<F, Tuple, std::void_t<std::apply_result_t<F, Tuple>>>
+    : std::true_type {};
+
+template <typename F, typename Tuple>
+constexpr auto is_applicable_v = is_applicable<F, Tuple>::value;
+\end{lstlisting}
+
+\section{\texttt{std::is\_applicable\_r}}
+\texttt{std::is\_applicable\_r} (and the corresponding template variable
+\texttt{std::is\_applicable\_r\_v}) is a unary type trait that inherits from
+\texttt{std::true\_type} if the passed tuple type can be expanded into an
+invocation of the passed function type, each with the same value
+categorizations to yield a result that is converible to \texttt{R}.
+
+\subsection{Implementation}
+\begin{lstlisting}
+template <typename R, typename F, typename Tuple, typename = std::void_t<>>
+struct is_applicable_r : std::false_type {};
+template <typename R, typename F, typename Tuple>
+struct is_applicable_r<R, F, Tuple, std::void_t<std::apply_result_t<F, Tuple>>>
+    : std::is_convertible<std::apply_result_t<F, Tuple>, R> {};
+
+template <typename F, typename Tuple>
+constexpr auto is_applicable_r_v = is_applicable<F, Tuple>::value;
+\end{lstlisting}
+
+\section{\texttt{std::is\_nothrow\_applicable}}
+\texttt{std::is\_nothrow\_applicable} (and the corresponding template variable
+\texttt{std::is\_nothrow\_applicable\_v}) is a unary type trait that inherits
+from \texttt{std::true\_type} if the passed tuple type can be expanded into an
+noexcept invocation of the passed function type.
+
+\subsection{Implementation}
+\begin{lstlisting}
+// apply_impl is for exposition only
+template <class F, class T, std::size_t... I>
+constexpr auto apply_impl(F&& f, T&& t, std::index_sequence<I...>) noexcept(
+    is_nothrow_invocable<F&&, decltype(std::get<I>(std::declval<T>()))...>{})
+    -> invoke_result_t<F&&, decltype(std::get<I>(std::declval<T>()))...> {
+  return invoke(std::forward<F>(f), std::get<I>(std::forward<T>(t))...);
+}
+
+template <typename F, typename Tuple, typename = std::void_t<>>
+struct is_nothrow_applicable : std::false_type {};
+template <typename F, typename Tuple>
+struct is_nothrow_applicable<
+    F,
+    Tuple,
+    std::void_t<std::apply_result_t<F, Tuple>>>
+    : std::bool_constant<noexcept(apply_impl(
+          std::declval<F>(),
+          std::declval<Tuple>(),
+          std::make_index_sequence<
+              std::tuple_size_v<std::decay_t<Tuple>>>{}))> {};
+
+template <typename F, typename Tuple>
+constexpr auto is_nothrow_applicable_v = is_nothrow_applicable<F, Tuple>::value;
+\end{lstlisting}
+
+\section{\texttt{std::is\_nothrow\_applicable\_r}}
+\texttt{std::is\_nothrow\_applicable\_t} (and the corresponding template
+variable \texttt{std::is\_nothrow\_applicable\_r\_v}) is a unary type trait
+that inherits from \texttt{std::true\_type} if the passed tuple type can be
+expanded into an noexcept invocation of the passed function type and yield a
+result that is convertible to \texttt{R}.
+
+\subsection{Implementation}
+\begin{lstlisting}
+// apply_impl is for exposition only
+template <class F, class T, std::size_t... I>
+constexpr auto apply_impl(F&& f, T&& t, std::index_sequence<I...>) noexcept(
+    is_nothrow_invocable<F&&, decltype(std::get<I>(std::declval<T>()))...>{})
+    -> invoke_result_t<F&&, decltype(std::get<I>(std::declval<T>()))...> {
+  return invoke(std::forward<F>(f), std::get<I>(std::forward<T>(t))...);
+}
+
+template <typename R, typename F, typename Tuple, typename = std::void_t<>>
+struct is_nothrow_applicable_r : std::false_type {};
+template <typename R, typename F, typename Tuple>
+struct is_nothrow_applicable_r<
+    R,
+    F,
+    Tuple,
+    std::void_t<std::apply_result_t<F, Tuple>>>
+    : std::conjunction<
+          std::is_convertible<std::apply_result_t<F, Tuple>, R>,
+          std::is_nothrow_applicable<F, Tuple>> {};
+
+template <typename F, typename Tuple>
+constexpr auto is_nothrow_applicable_r_v =
+    is_nothrow_applicable_r<F, Tuple>::value;
+\end{lstlisting}
+
+\section{Changes to the current standard}
+\subsection{Section 23.15.2 (\texttt{[meta.type.synop]})}
+\begin{lstlisting}
+// 23.15.6, type relations
+\end{lstlisting}
+\begin{lstlisting}
+template <class Fn, class... ArgTypes> struct is_invocable;
+template <class R, class Fn, class... ArgTypes> struct is_invocable_r;
+
+template <class Fn, class... ArgTypes> struct is_nothrow_invocable;
+template <class R, class Fn, class... ArgTypes> struct is_nothrow_invocable_r;
+\end{lstlisting}
+\begin{lstlisting}[style=base]
+template <class R, class Tuple> struct is_applicable;
+template <class R, class Tuple> struct is_applicable_r;
+
+template <class R, class Tuple> struct is_nothrow_applicable;
+template <class R, class Tuple> struct is_nothrow_applicable_r;
+\end{lstlisting}
+
+\begin{lstlisting}
+// 23.15.6, type relations
+\end{lstlisting}
+\begin{lstlisting}
+template <class Fn, class... ArgTypes>
+  inline constexpr bool is_invocable_v = is_invocable<Fn, ArgTypes...>::value;
+template <class R, class Fn, class... ArgTypes>
+  inline constexpr bool is_invocable_r_v = is_invocable_r<R, Fn, ArgTypes...>::value;
+template <class Fn, class... ArgTypes>
+  inline constexpr bool is_nothrow_invocable_v = is_nothrow_invocable<Fn, ArgTypes...>::value;
+template <class R, class Fn, class... ArgTypes>
+  inline constexpr bool is_nothrow_invocable_r_v
+    = is_nothrow_invocable_r<R, Fn, ArgTypes...>::value;
+\end{lstlisting}
+\begin{lstlisting}[style=base]
+template <class Fn, class Tuple>
+  inline constexpr bool is_applicable_v = is_applicable<Fn, Tuple>::value;
+template <class R, class Fn, class Tuple>
+  inline constexpr bool is_applicable_r_v = is_applicable_r<R, Fn, Tuple>::value;
+template <class Fn, class Tuple>
+  inline constexpr bool is_nothrow_applicable_v = is_nothrow_applicable<Fn, Tuple>::value;
+template <class R, class Fn, class Tuple>
+  inline constexpr bool is_nothrow_applicable_r_v
+    = is_nothrow_applicable_r<R, Fn, Tuple>::value;
+\end{lstlisting}
+
+\subsection{Section 23.15.6 (\texttt{[meta.rel]})}
+\subsubsection{\texttt{std::is\_applicable}}
+\textcolor{darkgreen}{\textbf{Template}}
+\begin{lstlisting}[style=base]
+template <class F, class Tuple>
+struct is_applicable;
+\end{lstlisting}
+
+\textcolor{darkgreen}{\textbf{Condition}} \\
+\textcolor{darkgreen}{The expression \texttt{std::apply(std::declval<Fn>(),
+std::declval<Tuple>())} is well-formed when treated as an unevaluated
+expression}
+
+\textcolor{darkgreen}{\textbf{Comments}} \\
+\textcolor{darkgreen}{\texttt{Fn} and \texttt{Tuple} shall be complete types,
+cv void or arrays of unknown bound}
+
+\subsubsection{\texttt{std::is\_applicable\_r}}
+\textcolor{darkgreen}{\textbf{Template}}
+\begin{lstlisting}[style=base]
+template <class R, class F, class Tuple>
+struct is_applicable_r;
+\end{lstlisting}
+
+\textcolor{darkgreen}{\textbf{Condition}} \\
+\textcolor{darkgreen}{The expression \texttt{std::apply(std::declval<Fn>(),
+std::declval<Tuple>())} is well-formed when treated as an unevaluated
+expression and yields a result that is convertible to \texttt{R}}
+
+\textcolor{darkgreen}{\textbf{Comments}} \\
+\textcolor{darkgreen}{\texttt{R}, \texttt{Fn} and \texttt{Tuple} shall be
+complete types, cv void or arrays of unknown bound}
+
+\subsubsection{\texttt{std::is\_nothrow\_applicable}}
+\textcolor{darkgreen}{\textbf{Template}}
+\begin{lstlisting}[style=base]
+template <class R, class F, class Tuple>
+struct is_nothrow_applicable;
+\end{lstlisting}
+
+\textcolor{darkgreen}{\textbf{Condition}} \\
+\textcolor{darkgreen}{\texttt{is\_applicable\_v<F, Tuple>} is true
+and the expression \texttt{std::apply(std::declval<F>(),
+std::declval<Tuple>())} is known not to throw any exceptions.}
+
+\textcolor{darkgreen}{\textbf{Comments}} \\
+\textcolor{darkgreen}{\texttt{Fn} and \texttt{Tuple} shall be complete types,
+cv void or arrays of unknown bound}
+
+\subsubsection{\texttt{std::is\_nothrow\_applicable\_r}}
+\textcolor{darkgreen}{\textbf{Template}}
+\begin{lstlisting}[style=base]
+template <class R, class F, class Tuple>
+struct is_nothrow_applicable_r;
+\end{lstlisting}
+
+\textcolor{darkgreen}{\textbf{Condition}} \\
+\textcolor{darkgreen}{\texttt{is\_applicable\_r\_v<F, Tuple>} is true
+and the expression \texttt{std::apply(std::declval<F>(),
+std::declval<Tuple>())} is known not to throw any exceptions.}
+
+\textcolor{darkgreen}{\textbf{Comments}} \\
+\textcolor{darkgreen}{\texttt{R}, \texttt{Fn} and \texttt{Tuple} shall be
+complete types, cv void or arrays of unknown bound}
+\end{document}
