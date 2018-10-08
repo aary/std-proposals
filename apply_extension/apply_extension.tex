@@ -37,6 +37,16 @@
   \fontdimen7\font=0.1em% extra space
   \hyphenchar\font=`\-% allowing hyphenation
 }
+\usepackage{xcolor}
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\lstdefinestyle{base}{
+  basicstyle={\color{darkgreen}\small\ttfamily},
+  showstringspaces=false,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{dkgreen},
+}
 % \usepackage{concmath}
 % \usepackage[T1]{fontenc}
 % ********************************* HEADERS ***********************************
@@ -84,8 +94,8 @@ the return type of of \texttt{std::apply}
 This proposal is a pure library extension.
 
 \section{\texttt{std::apply\_result}}
-\texttt{std::apply\_result} and the corresponding alias
-\texttt{std::apply\_result\_t} is the proposed trait that should be used in
+\texttt{std::apply\_result} (and the corresponding alias
+\texttt{std::apply\_result\_t}) is the proposed trait that should be used in
 the return type of \texttt{std::apply}.  With the new declaration being
 
 \begin{lstlisting}
@@ -93,16 +103,20 @@ template <class F, class Tuple>
 constexpr std::apply_result_t<F, Tuple> apply(F&& f, Tuple&& t);
 \end{lstlisting}
 
+This fixes hard errors originating from code that tries to employ commonly-used
+SFINAE patterns with \texttt{std::apply} that could have otherwise been well
+formed.  And is backwards compatible with well-formed usecases of
+\texttt{std::apply}
+
 \section{Implementation}
 \texttt{std::apply\_result} can be defined using the existing
-\texttt{std::invoke\_result} trait to avoid duplication in implementation
+\texttt{std::invoke\_result} trait to avoid duplication in implementations
 
 \begin{lstlisting}
 // apply_impl is for exposition only
 template <class F, class T, std::size_t... I>
 constexpr auto apply_impl(F&& f, T&& t, std::index_sequence<I...>) noexcept(
-    is_nothrow_invocable<F&&, decltype(std::get<I>(std::declval<T>()))...>::
-        value)
+    is_nothrow_invocable<F&&, decltype(std::get<I>(std::declval<T>()))...>{})
     -> invoke_result_t<F&&, decltype(std::get<I>(std::declval<T>()))...> {
   return invoke(std::forward<F>(f), std::get<I>(std::forward<T>(t))...);
 }
@@ -122,14 +136,94 @@ class apply_result<F, Tuple, std::void_t<std::apply_result_t<F, Tuple>>> {
 \end{lstlisting}
 
 \section{Changes to the standard}
-\subsection{Section 23.5.2 (\texttt{[[tuple.syn]]}) paragraph 1}
+\subsection{Section 23.5.2 (\texttt{[[tuple.syn]]})}
 \begin{lstlisting}
     // 23.5.3.5, calling a function with a tuple of arguments
     template <class F, class Tuple>
-    constexpr |\color{red}std::apply\_result\_t<F, Tuple>| apply(F&& f, Tuple&& t);
-
-    |\color{red}template <class F, class Tuple> class apply\_result;|
-    |\color{red}template <class F, class Tuple>|
-      |\color{red}using apply\_result\_t = typename apply\_result<F, Tuple>::type;|
+    constexpr |\color{darkgreen}std::apply\_result\_t<F, Tuple>| apply(F&& f, Tuple&& t);
 \end{lstlisting}
+\begin{lstlisting}[style=base]
+    template <class F, class Tuple> class apply_result;
+    template <class F, class Tuple> using apply_result_t = (see below);
+\end{lstlisting}
+
+\subsection{Section 23.5.3.5 (\texttt{[tuple.apply]} paragraph 1)}
+\begin{lstlisting}
+    template <class F, class Tuple>
+    constexpr |\color{darkgreen}std::apply\_result\_t<F, Tuple>| apply(F&& f, Tuple&& t) |\color{darkgreen}noexcept(see below);|
+\end{lstlisting}
+
+Effects: Given the exposition-only function:
+
+\begin{lstlisting}[style=base]
+    template <class F, class T, std::size_t... I>
+    constexpr auto apply_impl(F&& f, T&& t, std::index_sequence<I...>) noexcept(
+        is_nothrow_invocable<F&&, decltype(std::get<I>(std::declval<T>()))...>{})
+        -> invoke_result_t<F&&, decltype(std::get<I>(std::declval<T>()))...> {
+      return invoke(std::forward<F>(f), std::get<I>(std::forward<T>(t))...);
+    }
+\end{lstlisting}
+
+Equivalent to:
+
+\begin{lstlisting}[style=base]
+  return apply_impl(
+      std::forward<F>(f),
+      std::forward<Tuple>(t),
+      std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>{}>{});
+\end{lstlisting}
+
+\textcolor{darkgreen}{Remarks: The expression inside noexcept is equivalent to:}
+
+\begin{lstlisting}[style=base]
+    apply_impl(std::forward<F>(f), std::forward<Tuple>(t),
+               make_index_sequence<tuple_size_v<decay_t<Tuple>>>|{});
+\end{lstlisting}
+
+\subsection{Section 23.5.3.6 (\texttt{[tuple.helper]})}
+
+\begin{lstlisting}[style=base]
+    template <class F, class Tuple> using apply_result_t = (see below)
+\end{lstlisting}
+
+\textcolor{darkgreen}{Effects: Given the exposition-only function:}
+
+\begin{lstlisting}[style=base]
+    template <class F, class T, std::size_t... I>
+    constexpr auto apply_impl(F&& f, T&& t, std::index_sequence<I...>) noexcept(
+        is_nothrow_invocable<F&&, decltype(std::get<I>(std::declval<T>()))...>{})
+        -> invoke_result_t<F&&, decltype(std::get<I>(std::declval<T>()))...> {
+      return invoke(std::forward<F>(f), std::get<I>(std::forward<T>(t))...);
+    }
+\end{lstlisting}
+
+\textcolor{darkgreen}{Equivalent to:}
+
+\begin{lstlisting}[style=base]
+    decltype(apply_impl(std::forward<F>(f), std::forward<Tuple>(t),
+             make_index_sequence<tuple_size_v<decay_t<Tuple>>>{});
+\end{lstlisting}
+
+\begin{lstlisting}[style=base]
+    template <typename F, typename Tuple, typename = void_t<>>
+    class apply_result {};
+    template <typename F, typename Tuple>
+    class apply_result<F, Tuple, void_t<apply_result_t<F, Tuple>>> {
+  	    using type = apply_result_t<F, Tuple>;
+    };
+\end{lstlisting}
+
+\textcolor{darkgreen}{If the expression \texttt{apply\_impl(std::declval<F>(),
+std::declval<Tuple>())} is well-formed when treated as an unevaluated operand
+(Clause 8), the member typedef \texttt{type} names the type
+\\\texttt{decltype(apply\_impl(std::declval<F>(), std::declval<Tuple>()))}.
+Otherwise there shall be no member type.  Access checking is performed as if
+in a context unrelated to \texttt{F} and \texttt{Tuple}.  Only the validaity
+of the immediate context is considered.  [Note: The compilation of the
+expression can result in side effects such as the instantiation of class
+template specializations and function template specializations, the generation
+of implicitly-defined functions and so on.  Such side-effects are not in the
+"immediate context" and can result in the program being ill-formed.  - end
+note]}
+
 \end{document}
