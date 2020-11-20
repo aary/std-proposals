@@ -125,7 +125,7 @@ template <typename F, typename Tuple>
 using apply_result_t = decltype(apply_impl(
     std::declval<F>(),
     std::declval<Tuple>(),
-    std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{}));
+    std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<Tuple>>>{}));
 
 template <typename F, typename Tuple, typename = std::void_t<>>
 class apply_result {};
@@ -170,14 +170,14 @@ Equivalent to:
   return apply_impl(
       std::forward<F>(f),
       std::forward<Tuple>(t),
-      std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>{}>{});
+      std::make_index_sequence<std::tuple_size<std::remove_reference_t<Tuple>>{}>{});
 \end{lstlisting}
 
 \textcolor{darkgreen}{Remarks: The expression inside noexcept is equivalent to:}
 
 \begin{lstlisting}[style=base]
     apply_impl(std::forward<F>(f), std::forward<Tuple>(t),
-               make_index_sequence<tuple_size_v<decay_t<Tuple>>>|{});
+               make_index_sequence<tuple_size_v<remove_reference_t<Tuple>>>|{});
 \end{lstlisting}
 
 \subsection{Section 23.5.3.6 (\texttt{[tuple.helper]})}
@@ -201,7 +201,7 @@ Equivalent to:
 
 \begin{lstlisting}[style=base]
     decltype(apply_impl(std::forward<F>(f), std::forward<Tuple>(t),
-             make_index_sequence<tuple_size_v<decay_t<Tuple>>>{});
+             make_index_sequence<tuple_size_v<remove_reference_t<Tuple>>>{});
 \end{lstlisting}
 
 \begin{lstlisting}[style=base]
